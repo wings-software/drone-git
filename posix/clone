@@ -38,12 +38,17 @@ fi
 
 if [[ ! -z "${DRONE_SSH_KEY}" ]]; then
 	mkdir ${HOME}/.ssh
-	echo -n "$DRONE_SSH_KEY" > ${HOME}/.ssh/id_rsa
+	echo "$DRONE_SSH_KEY" > ${HOME}/.ssh/id_rsa
 	chmod 600 ${HOME}/.ssh/id_rsa
 
 	touch ${HOME}/.ssh/known_hosts
 	chmod 600 ${HOME}/.ssh/known_hosts
-	ssh-keyscan -H ${DRONE_NETRC_MACHINE} > /etc/ssh/ssh_known_hosts 2> /dev/null
+
+	SSH_KEYSCAN_FLAGS=""
+	if [[ ! -z "${DRONE_NETRC_PORT}" ]]; then
+		SSH_KEYSCAN_FLAGS="-p ${DRONE_NETRC_PORT}"
+	fi
+	ssh-keyscan -H ${SSH_KEYSCAN_FLAGS} ${DRONE_NETRC_MACHINE} > /etc/ssh/ssh_known_hosts 2> /dev/null
 fi
 
 # AWS codecommit support using AWS access key & secret key
