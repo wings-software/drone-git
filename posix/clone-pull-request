@@ -10,11 +10,30 @@ if [ ! -d .git ]; then
 	git remote add origin ${DRONE_REMOTE_URL}
 fi
 
+# If PR clone strategy is cloning only the source branch
+if [ "$DRONE_PR_CLONE_STRATEGY" == "source_branch" ]; then
+	set -e
+	set -x
+
+	git fetch ${FLAGS} origin ${DRONE_COMMIT_REF}:
+	git checkout ${DRONE_COMMIT_SHA}
+	exit 0
+fi
+
+# PR clone strategy is merge commit
+
+targetBranchHead=${DRONE_COMMIT_BRANCH}
+if [[ ! -z "${DRONE_COMMIT_BEFORE}" ]]; then
+	targetBranchHead=${DRONE_COMMIT_BEFORE}
+fi
+
+echo $targetBranchHead
+
 set -e
 set -x
 
 git fetch ${FLAGS} origin +refs/heads/${DRONE_COMMIT_BRANCH}:
-git checkout ${DRONE_COMMIT_BRANCH}
+git checkout $targetBranchHead
 
 git fetch origin ${DRONE_COMMIT_REF}:
 git merge ${DRONE_COMMIT_SHA}
