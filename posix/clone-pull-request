@@ -11,7 +11,7 @@ if [ ! -d .git ]; then
 fi
 
 # If PR clone strategy is cloning only the source branch
-if [ "$DRONE_PR_CLONE_STRATEGY" == "source_branch" ]; then
+if [ "$DRONE_PR_CLONE_STRATEGY" == "SourceBranch" ]; then
 	set -e
 	set -x
 
