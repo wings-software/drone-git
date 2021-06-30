@@ -11,7 +11,7 @@ if [ ! -d .git ]; then
 fi
 
 # If PR clone strategy is cloning only the source branch
-if [ "$DRONE_PR_CLONE_STRATEGY" == "SourceBranch" ]; then
+if [ "$PLUGIN_PR_CLONE_STRATEGY" == "SourceBranch" ]; then
 	set -e
 	set -x
 
@@ -27,7 +27,6 @@ if [[ ! -z "${DRONE_COMMIT_BEFORE}" ]]; then
 	targetBranchHead=${DRONE_COMMIT_BEFORE}
 fi
 
-echo $targetBranchHead
 
 set -e
 set -x
