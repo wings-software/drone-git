@@ -22,9 +22,9 @@ fi
 
 # PR clone strategy is merge commit
 
-targetBranchHead=${DRONE_COMMIT_BRANCH}
+targetRef=${DRONE_COMMIT_BRANCH}
 if [[ ! -z "${DRONE_COMMIT_BEFORE}" ]]; then
-	targetBranchHead=${DRONE_COMMIT_BEFORE}
+	targetRef="${DRONE_COMMIT_BEFORE} -b ${DRONE_COMMIT_BRANCH}"
 fi
 
 
@@ -32,7 +32,7 @@ set -e
 set -x
 
 git fetch ${FLAGS} origin +refs/heads/${DRONE_COMMIT_BRANCH}:
-git checkout $targetBranchHead -b ${DRONE_COMMIT_BRANCH}
+git checkout ${targetRef}
 
 git fetch origin ${DRONE_COMMIT_REF}:
 git merge ${DRONE_COMMIT_SHA}
