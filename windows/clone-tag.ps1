@@ -1,3 +1,4 @@
+Set-PSDebug -Trace 1
 
 Set-Variable -Name "FLAGS" -Value ""
 if ($Env:PLUGIN_DEPTH) {

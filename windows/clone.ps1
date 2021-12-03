@@ -22,6 +22,18 @@ password $Env:DRONE_NETRC_PASSWORD
 "@ > (Join-Path $Env:USERPROFILE '_netrc');
 }
 
+# AWS codecommit support using AWS access key & secret key
+# Refer: https://docs.aws.amazon.com/codecommit/latest/userguide/setting-up-https-unixes.html
+
+if ($Env:DRONE_AWS_ACCESS_KEY) {
+	aws configure set aws_access_key_id $DRONE_AWS_ACCESS_KEY
+	aws configure set aws_secret_access_key $DRONE_AWS_SECRET_KEY
+	aws configure set default.region $DRONE_AWS_REGION
+
+	git config --global credential.helper '!aws codecommit credential-helper $@'
+	git config --global credential.UseHttpPath true
+}
+
 # configure git global behavior and parameters via the
 # following environment variables:
 
@@ -48,7 +60,23 @@ $Env:GIT_COMMITTER_EMAIL = $Env:GIT_AUTHOR_EMAIL
 # TODO we should ultimately look at the ref, since
 # we need something compatible with deployment events.
 
-switch ($Env:DRONE_BUILD_EVENT) {
+$CLONE_TYPE=$Env:DRONE_BUILD_EVENT
+switch -regex ($Env:DRONE_COMMIT_REF) { 
+    'refs/tags/*' {
+        $CLONE_TYPE="tag"
+    }
+    'refs/pull/*' {
+        $CLONE_TYPE="pull_request"
+    }
+    'refs/pull-request/*' {
+        $CLONE_TYPE="pull_request"
+    }
+    'refs/merge-requests/*' {
+        $CLONE_TYPE="pull_request"
+    }
+}
+
+switch ($CLONE_TYPE) {
     "pull_request" {
         Invoke-Expression "${PSScriptRoot}\clone-pull-request.ps1"
         break
