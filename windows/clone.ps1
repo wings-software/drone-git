@@ -48,7 +48,32 @@ $Env:GIT_COMMITTER_EMAIL = $Env:GIT_AUTHOR_EMAIL
 # TODO we should ultimately look at the ref, since
 # we need something compatible with deployment events.
 
-switch ($Env:DRONE_BUILD_EVENT) {
+Set-Variable -Name "CLONE_TYPE" -Value "$Env:DRONE_BUILD_EVENT"
+switch -regex ($Env:DRONE_COMMIT_REF)
+{
+    'refs/tags/*' {
+        Set-Variable -Name "CLONE_TYPE" -Value "tag"
+        break
+    }
+
+    'refs/pull/*' {
+        Set-Variable -Name "CLONE_TYPE" -Value "pull_request"
+        break
+    }
+
+    'refs/pull-request/*' {
+        Set-Variable -Name "CLONE_TYPE" -Value "pull_request"
+        break
+    }
+
+    'refs/merge-requests/*' {
+        Set-Variable -Name "CLONE_TYPE" -Value "pull_request"
+        break
+    }
+
+}
+
+switch ($CLONE_TYPE) {
     "pull_request" {
         Invoke-Expression "${PSScriptRoot}\clone-pull-request.ps1"
         break
