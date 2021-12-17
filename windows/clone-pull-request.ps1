@@ -29,9 +29,6 @@ if (Test-Path env:DRONE_COMMIT_BEFORE) {
 	git checkout $Env:DRONE_COMMIT_BRANCH
 }
 
-Write-Host "+ git checkout ${targetRef}"
-git checkout ${targetRef}
-
 Write-Host "+ git fetch origin ${Env:DRONE_COMMIT_REF}:"
 git fetch origin "${Env:DRONE_COMMIT_REF}:"
 Write-Host "+ git merge $Env:DRONE_COMMIT_SHA"
