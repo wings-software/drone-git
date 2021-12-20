@@ -1,3 +1,4 @@
+$ErrorActionPreference = 'Stop';
 
 Set-Variable -Name "FLAGS" -Value ""
 if ($Env:PLUGIN_DEPTH) {
