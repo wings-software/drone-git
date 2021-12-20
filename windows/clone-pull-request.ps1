@@ -1,4 +1,4 @@
-UseUtility.ps1
+. "${PSScriptRoot}\utility.ps1"
 
 Set-Alias iu Invoke-Utility
 

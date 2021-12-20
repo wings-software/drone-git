@@ -1,3 +1,6 @@
+. "${PSScriptRoot}\utility.ps1"
+
+Set-Alias iu Invoke-Utility
 
 Set-Variable -Name "FLAGS" -Value ""
 if ($Env:PLUGIN_DEPTH) {
@@ -6,9 +9,9 @@ if ($Env:PLUGIN_DEPTH) {
 
 if (!(Test-Path .git)) {
 	Write-Host '+ git init';
-	git init
+	iu git init
 	Write-Host "+ git remote add origin $Env:DRONE_REMOTE_URL"
-	git remote add origin $Env:DRONE_REMOTE_URL
+	iu git remote add origin $Env:DRONE_REMOTE_URL
 }
 
 # the branch may be empty for certain event types,
@@ -18,9 +21,9 @@ if (!(Test-Path .git)) {
 # clones due to lack of history.
 if (-not (Test-Path env:DRONE_COMMIT_BRANCH)) {
 	Write-Host "+ git fetch origin";
-	git fetch origin
+	iu git fetch origin
 	Write-Host "+ git checkout -qf ${Env:DRONE_COMMIT_SHA}";
-	git checkout -qf ${Env:DRONE_COMMIT_SHA}
+	iu git checkout -qf ${Env:DRONE_COMMIT_SHA}
 	exit 0
 }
 
@@ -29,13 +32,13 @@ if (-not (Test-Path env:DRONE_COMMIT_BRANCH)) {
 # the commit is empty we clone the branch.
 if (-not (Test-Path env:DRONE_COMMIT_SHA)) {
 	Write-Host "+ git fetch ${FLAGS} origin +refs/heads/${Env:DRONE_COMMIT_BRANCH}:";
-	git fetch ${FLAGS} origin "+refs/heads/${Env:DRONE_COMMIT_BRANCH}:"
+	iu git fetch ${FLAGS} origin "+refs/heads/${Env:DRONE_COMMIT_BRANCH}:"
 	Write-Host "+ git checkout -b ${Env:DRONE_COMMIT_BRANCH} origin/${Env:DRONE_COMMIT_BRANCH}";
-	git checkout -b ${Env:DRONE_COMMIT_BRANCH} origin/${Env:DRONE_COMMIT_BRANCH}
+	iu git checkout -b ${Env:DRONE_COMMIT_BRANCH} origin/${Env:DRONE_COMMIT_BRANCH}
 	exit 0
 }
 
 Write-Host "+ git fetch ${FLAGS} origin +refs/heads/${Env:DRONE_COMMIT_BRANCH}:"
-git fetch ${FLAGS} origin "+refs/heads/${Env:DRONE_COMMIT_BRANCH}:"
+iu git fetch ${FLAGS} origin "+refs/heads/${Env:DRONE_COMMIT_BRANCH}:"
 Write-Host "+ git checkout ${Env:DRONE_COMMIT_SHA} -b ${Env:DRONE_COMMIT_BRANCH}"
-git checkout ${Env:DRONE_COMMIT_SHA} -b ${Env:DRONE_COMMIT_BRANCH}
+iu git checkout ${Env:DRONE_COMMIT_SHA} -b ${Env:DRONE_COMMIT_BRANCH}
