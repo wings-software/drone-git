@@ -1,0 +1,11 @@
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.5-218
+RUN microdnf install git ca-certificates
+
+ADD posix/* /usr/local/bin/
+
+RUN chmod -R 777 /etc/ssh
+RUN adduser -g Drone -s /bin/sh -D -u 1000 drone
+USER drone:drone
+RUN chmod -R 777 /home/drone
+
+ENTRYPOINT ["/usr/local/bin/clone"]
