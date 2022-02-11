@@ -26,14 +26,6 @@ if ($Env:DRONE_SSH_KEY) {
 	mkdir C:\.ssh
     echo $Env:DRONE_SSH_KEY > C:\.ssh\id_rsa
 
-    New-Variable -Name Key -Value "C:\\.ssh\\id_rsa"
-    Icacls $Key /c /t /Inheritance:d
-    Icacls $Key /c /t /Grant ${env:UserName}:F
-    TakeOwn /F $Key
-    Icacls $Key /c /t /Grant:r ${env:UserName}:F
-    Icacls $Key /c /t /Remove:g Administrator "Authenticated Users" BUILTIN\Administrators BUILTIN Everyone System Users
-    Icacls $Key
-
 	# $Env:SSH_KEYSCAN_FLAGS=""
     # if ($Env:DRONE_NETRC_PORT) {
 	# 	$Env:SSH_KEYSCAN_FLAGS="-p ${Env:DRONE_NETRC_PORT}"
