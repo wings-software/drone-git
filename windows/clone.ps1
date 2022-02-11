@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop';
 
 # HACK: no clue how to set the PATH inside the Dockerfile,
 # so am setting it here instead. This is not idea.
-$Env:PATH += ';C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin'
+$Env:PATH += ';C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh'
 
 # if the workspace is set we should make sure
 # it is the current working directory.
@@ -20,6 +20,19 @@ machine $Env:DRONE_NETRC_MACHINE
 login $Env:DRONE_NETRC_USERNAME
 password $Env:DRONE_NETRC_PASSWORD
 "@ > (Join-Path $Env:USERPROFILE '_netrc');
+}
+
+if ($Env:DRONE_SSH_KEY) {
+	mkdir C:\.ssh
+    echo $Env:DRONE_SSH_KEY > C:\.ssh\id_rsa
+
+	# $Env:SSH_KEYSCAN_FLAGS=""
+    # if ($Env:DRONE_NETRC_PORT) {
+	# 	$Env:SSH_KEYSCAN_FLAGS="-p ${Env:DRONE_NETRC_PORT}"
+    # }
+	# ssh-keyscan -H $Env:SSH_KEYSCAN_FLAGS $Env:DRONE_NETRC_MACHINE >  C:\Users\Administrator\.ssh\known_hosts
+
+	$Env:GIT_SSH_COMMAND="ssh -i C:\\.ssh\\id_rsa ${Env:SSH_KEYSCAN_FLAGS} -o StrictHostKeyChecking=no"
 }
 
 # configure git global behavior and parameters via the
