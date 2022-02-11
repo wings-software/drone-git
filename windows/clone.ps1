@@ -23,16 +23,16 @@ password $Env:DRONE_NETRC_PASSWORD
 }
 
 if ($Env:DRONE_SSH_KEY) {
-	mkdir C:\.ssh
+    mkdir C:\.ssh
     echo $Env:DRONE_SSH_KEY > C:\.ssh\id_rsa
 
-	# $Env:SSH_KEYSCAN_FLAGS=""
+    # $Env:SSH_KEYSCAN_FLAGS=""
     # if ($Env:DRONE_NETRC_PORT) {
-	# 	$Env:SSH_KEYSCAN_FLAGS="-p ${Env:DRONE_NETRC_PORT}"
+    # 	$Env:SSH_KEYSCAN_FLAGS="-p ${Env:DRONE_NETRC_PORT}"
     # }
-	# ssh-keyscan -H $Env:SSH_KEYSCAN_FLAGS $Env:DRONE_NETRC_MACHINE >  C:\Users\Administrator\.ssh\known_hosts
+    # ssh-keyscan -H $Env:SSH_KEYSCAN_FLAGS $Env:DRONE_NETRC_MACHINE >  C:\Users\Administrator\.ssh\known_hosts
 
-	$Env:GIT_SSH_COMMAND="ssh -i C:\\.ssh\\id_rsa ${Env:SSH_KEYSCAN_FLAGS} -o StrictHostKeyChecking=no"
+    $Env:GIT_SSH_COMMAND="ssh -i C:\\.ssh\\id_rsa ${Env:SSH_KEYSCAN_FLAGS} -o StrictHostKeyChecking=no"
 }
 
 # configure git global behavior and parameters via the
