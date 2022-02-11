@@ -13,7 +13,7 @@ RUN Add-WindowsCapability -Online -Name OpenSSH.Client*
 FROM mcr.microsoft.com/powershell:nanoserver-1809
 COPY --from=git /git /git
 
-COPY --from=git C:\Windows\System32\OpenSSH\* /openssh
+COPY --from=git C:\Windows\System32\OpenSSH\ /openssh
 
 ADD windows/* /bin/
 

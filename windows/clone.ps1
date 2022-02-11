@@ -24,20 +24,23 @@ password $Env:DRONE_NETRC_PASSWORD
 
 if ($Env:DRONE_SSH_KEY) {
 	mkdir C:\.ssh
-    @"$Env:DRONE_SSH_KEY"@ > C:\.ssh\id_rsa
-    type C:\.ssh\id_rsa
-	# chmod 600 C:\.ssh\id_rsa
-    icacls C:\.ssh\id_rsa /grant Administrator:(R,W)
-	# touch ${HOME}/.ssh/known_hosts
-	# chmod 600 ${HOME}/.ssh/known_hosts
+    echo $Env:DRONE_SSH_KEY > C:\.ssh\id_rsa
 
-	$Env:SSH_KEYSCAN_FLAGS=""
-    if ($Env:DRONE_NETRC_PORT) {
-		$Env:SSH_KEYSCAN_FLAGS="-p ${Env:DRONE_NETRC_PORT}"
-    }
-	ssh-keyscan.exe -H $Env:SSH_KEYSCAN_FLAGS $Env:DRONE_NETRC_MACHINE
+    New-Variable -Name Key -Value "C:\\.ssh\\id_rsa"
+    Icacls $Key /c /t /Inheritance:d
+    Icacls $Key /c /t /Grant ${env:UserName}:F
+    TakeOwn /F $Key
+    Icacls $Key /c /t /Grant:r ${env:UserName}:F
+    Icacls $Key /c /t /Remove:g Administrator "Authenticated Users" BUILTIN\Administrators BUILTIN Everyone System Users
+    Icacls $Key
 
-	$Env:GIT_SSH_COMMAND="ssh -i C:\.ssh\id_rsa ${Env:SSH_KEYSCAN_FLAGS} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+	# $Env:SSH_KEYSCAN_FLAGS=""
+    # if ($Env:DRONE_NETRC_PORT) {
+	# 	$Env:SSH_KEYSCAN_FLAGS="-p ${Env:DRONE_NETRC_PORT}"
+    # }
+	# ssh-keyscan -H $Env:SSH_KEYSCAN_FLAGS $Env:DRONE_NETRC_MACHINE >  C:\Users\Administrator\.ssh\known_hosts
+
+	$Env:GIT_SSH_COMMAND="ssh -i C:\\.ssh\\id_rsa ${Env:SSH_KEYSCAN_FLAGS} -o StrictHostKeyChecking=no"
 }
 
 # configure git global behavior and parameters via the
