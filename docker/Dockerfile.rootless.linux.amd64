@@ -5,7 +5,7 @@ RUN pip-3 install awscli
 ADD posix/* /usr/local/bin/
 RUN chmod -R 777 /etc/ssh
 RUN groupadd Drone && adduser -g Drone -s /bin/sh -u 1000 drone
-RUN echo 'drone ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/drone
+# RUN echo 'drone ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/drone
 USER drone:drone
 RUN chmod -R 777 /home/drone
 
