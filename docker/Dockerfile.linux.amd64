@@ -4,4 +4,4 @@ RUN pip-3 install awscli
 
 ADD posix/* /usr/local/bin/
 
-RUN chmod -R 777 /home/drone
+ENTRYPOINT ["/usr/local/bin/clone"] 
