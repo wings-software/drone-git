@@ -3,6 +3,7 @@ RUN microdnf update && microdnf install ca-certificates git git-lfs openssh curl
 RUN pip-3 install awscli
 
 ADD posix/* /usr/local/bin/
+RUN rm *.go
 RUN chmod -R 777 /etc/ssh
 RUN groupadd drone && adduser -g drone -s /bin/sh -u 1000 drone
 USER drone:drone
