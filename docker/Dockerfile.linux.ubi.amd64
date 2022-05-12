@@ -1,6 +1,0 @@
-FROM redhat/ubi8-minimal:8.5-240.1648458092
-RUN microdnf install git ca-certificates
-
-ADD posix/* /usr/local/bin/
-
-ENTRYPOINT ["/usr/local/bin/clone"]
