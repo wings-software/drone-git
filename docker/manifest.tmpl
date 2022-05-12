@@ -7,48 +7,48 @@ tags:
 {{/if}}
 manifests:
   -
-    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}-{{/if}}linux-amd64
+    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-linux-amd64
     platform:
       architecture: amd64
       os: linux
   -
-    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}-{{/if}}linux-arm64
+    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-linux-arm64
     platform:
       variant: v8
       architecture: arm64
       os: linux
   -
-    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}-{{/if}}linux-arm
+    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-linux-arm
     platform:
       variant: v7
       architecture: arm
       os: linux
   -
-    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}-{{/if}}linux-arm
+    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-linux-arm
     platform:
       variant: v6
       architecture: arm
       os: linux
   -
-    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}-{{/if}}windows-1803-amd64
+    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-1803-amd64
     platform:
       architecture: amd64
       os: windows
       version: 1803
   -
-    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}-{{/if}}windows-1809-amd64
+    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-1809-amd64
     platform:
       architecture: amd64
       os: windows
       version: 1809
   -
-    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}-{{/if}}windows-1903-amd64
+    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-1903-amd64
     platform:
       architecture: amd64
       os: windows
       version: 1903
   -
-    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}-{{/if}}windows-1909-amd64
+    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-1909-amd64
     platform:
       architecture: amd64
       os: windows
