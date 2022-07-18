@@ -4,4 +4,4 @@
 LICENSE
 README.md
 */fixtures*
-*.go
+posix/*.go
