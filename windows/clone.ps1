@@ -4,10 +4,9 @@ $ErrorActionPreference = 'Stop';
 # so am setting it here instead. This is not idea.
 $Env:PATH += ';C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh'
 
-# if the workspace is set we should make sure
-# it is the current working directory.
-
+# if the workspace is set we should create it and make sure it is the current working directory.
 if ($Env:DRONE_WORKSPACE) {
+    md -Force $Env:DRONE_WORKSPACE
     cd $Env:DRONE_WORKSPACE
 }
 

@@ -9,6 +9,11 @@ if [ "$HOME" != "/home/drone" ]; then
 	fi
 fi
 
+if [[ ! -z "${DRONE_WORKSPACE}" ]]; then
+	mkdir -p ${DRONE_WORKSPACE}
+	cd ${DRONE_WORKSPACE}
+fi
+
 # if the netrc enviornment variables exist, write
 # the netrc file.
 
