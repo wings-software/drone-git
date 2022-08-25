@@ -41,3 +41,5 @@ set -x
 
 git fetch ${FLAGS} origin +refs/heads/${DRONE_COMMIT_BRANCH}:
 git checkout ${DRONE_COMMIT_SHA} -b ${DRONE_COMMIT_BRANCH}
+git config --add safe.directory "$PWD"
+git config --list
