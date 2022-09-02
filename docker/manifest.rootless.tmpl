@@ -12,6 +12,11 @@ manifests:
       architecture: amd64
       os: linux
   -
+    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-linux-arm64-rootless
+    platform:
+      architecture: arm64
+      os: linux
+  -
     image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-1809-amd64
     platform:
       architecture: amd64
