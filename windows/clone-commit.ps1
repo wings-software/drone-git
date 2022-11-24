@@ -19,7 +19,7 @@ if (!(Test-Path .git)) {
 # is empty we checkout the sha directly. Note that
 # we intentially omit depth flags to avoid failed
 # clones due to lack of history.
-if (-not (Test-Path env:DRONE_COMMIT_BRANCH)) {
+if ([string]::IsNullOrEmpty($env:DRONE_COMMIT_BRANCH)) {
 	Write-Host "+ git fetch origin";
 	iu git fetch origin
 	Write-Host "+ git checkout -qf ${Env:DRONE_COMMIT_SHA}";
@@ -30,7 +30,7 @@ if (-not (Test-Path env:DRONE_COMMIT_BRANCH)) {
 # the commit sha may be empty for builds that are
 # manually triggered in Harness CI Enterprise. If
 # the commit is empty we clone the branch.
-if (-not (Test-Path env:DRONE_COMMIT_SHA)) {
+if ([string]::IsNullOrEmpty($env:DRONE_COMMIT_SHA)) {
 	Write-Host "+ git fetch ${FLAGS} origin +refs/heads/${Env:DRONE_COMMIT_BRANCH}:";
 	iu git fetch ${FLAGS} origin "+refs/heads/${Env:DRONE_COMMIT_BRANCH}:"
 	Write-Host "+ git checkout -b ${Env:DRONE_COMMIT_BRANCH} origin/${Env:DRONE_COMMIT_BRANCH}";
