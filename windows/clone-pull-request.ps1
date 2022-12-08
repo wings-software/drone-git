@@ -2,7 +2,9 @@
 
 Set-Alias iu Invoke-Utility
 
+Write-Host "Printing env"
 Get-ChildItem Env:
+Write-Host "Printed env"
 
 Set-Variable -Name "FLAGS" -Value ""
 if ($Env:PLUGIN_DEPTH) {
@@ -29,6 +31,7 @@ Write-Host "Remote Url: ${Env:DRONE_REMOTE_URL}"
 Write-Host "Drone commit branch: ${Env:DRONE_COMMIT_BRANCH}"
 Write-Host "Checking set remote"
 git remote -v
+Write-Host "Checked remote"
 Write-Host "+ git fetch ${FLAGS} origin +refs/heads/${Env:DRONE_COMMIT_BRANCH}:"
 iu git fetch ${FLAGS} origin "+refs/heads/${Env:DRONE_COMMIT_BRANCH}:"
 
