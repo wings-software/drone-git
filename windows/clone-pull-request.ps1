@@ -26,7 +26,7 @@ Write-Host "Remote Url: ${Env:DRONE_REMOTE_URL}"
 Write-Host "Drone commit branch: ${Env:DRONE_COMMIT_BRANCH}"
 
 Write-Host "+ git fetch ${FLAGS} origin +refs/heads/${Env:DRONE_COMMIT_BRANCH}:"
-iu git fetch ${FLAGS} origin "+refs/heads/${Env:DRONE_COMMIT_BRANCH}:"
+iu git fetch origin "+refs/heads/${Env:DRONE_COMMIT_BRANCH}:"
 
 if (Test-Path env:DRONE_COMMIT_BEFORE) {
 	# PR clone strategy is merge commit
