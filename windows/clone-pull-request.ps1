@@ -2,10 +2,13 @@
 
 Set-Alias iu Invoke-Utility
 
+Get-ChildItem Env:
+
 Set-Variable -Name "FLAGS" -Value ""
 if ($Env:PLUGIN_DEPTH) {
     Set-Variable -Name "FLAGS" -Value "--depth=$Env:PLUGIN_DEPTH"
 }
+
 
 if (!(Test-Path .git)) {
 	Write-Host "Git init"
