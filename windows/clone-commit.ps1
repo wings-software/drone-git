@@ -22,8 +22,7 @@ if (!(Test-Path .git)) {
 # we intentially omit depth flags to avoid failed
 # clones due to lack of history.
 if ([string]::IsNullOrEmpty($env:DRONE_COMMIT_BRANCH)) {
-	Write-Host "+ git fetch origin";
-	iu git fetch origin
+	sf
 	Write-Host "+ git checkout -qf ${Env:DRONE_COMMIT_SHA}";
 	iu git checkout -qf ${Env:DRONE_COMMIT_SHA}
 	exit 0
