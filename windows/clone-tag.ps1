@@ -1,6 +1,8 @@
 . "${PSScriptRoot}\utility.ps1"
+. "${PSScriptRoot}\git-utility.ps1"
 
 Set-Alias iu Invoke-Utility
+Set-Alias sf Start-Fetch
 
 Set-Variable -Name "FLAGS" -Value ""
 if ($Env:PLUGIN_DEPTH) {
@@ -14,7 +16,6 @@ if (!(Test-Path .git)) {
 	iu git remote add origin "$Env:DRONE_REMOTE_URL"
 }
 
-Write-Host "+ git fetch $FLAGS origin +refs/tags/${Env:DRONE_TAG}:";
-iu git fetch $FLAGS origin "+refs/tags/${Env:DRONE_TAG}:"
+sf ${FLAGS} "+refs/tags/${Env:DRONE_TAG}"
 Write-Host "+ git checkout -qf ${Env:FETCH_HEAD}";
 iu git checkout -qf FETCH_HEAD
