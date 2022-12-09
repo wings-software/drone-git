@@ -1,13 +1,17 @@
 function Start-Fetch {
-    $args, $ref = $Args
-    if ([string]::IsNullOrEmpty($args) && [string]::IsNullOrEmpty($ref)) {
+    param (
+        $flags,
+        $ref
+    )
+
+    if ([string]::IsNullOrEmpty($ref)) {
         Write-Host "+ git fetch origin"
         iu git fetch origin
-    } elseif ([string]::IsNullOrEmpty($args)) {
+    } elseif([string]::IsNullOrEmpty($flags)) {
         Write-Host "+ git fetch origin ${ref}:"
         iu git fetch origin "${ref}:"
     } else {
-        Write-Host "+ git fetch ${args} origin ${ref}:"
-        iu git fetch ${args} origin "${ref}:"
+        Write-Host "+ git fetch ${flags} origin ${ref}:"
+        iu git fetch ${flags} origin "${ref}:"
     }
 }

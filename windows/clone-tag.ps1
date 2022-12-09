@@ -16,6 +16,6 @@ if (!(Test-Path .git)) {
 	iu git remote add origin "$Env:DRONE_REMOTE_URL"
 }
 
-sf ${FLAGS} "+refs/tags/${Env:DRONE_TAG}"
+sf -flags ${FLAGS} -ref "+refs/tags/${Env:DRONE_TAG}"
 Write-Host "+ git checkout -qf ${Env:FETCH_HEAD}";
 iu git checkout -qf FETCH_HEAD

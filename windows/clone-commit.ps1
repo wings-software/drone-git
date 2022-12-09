@@ -22,7 +22,7 @@ if (!(Test-Path .git)) {
 # we intentially omit depth flags to avoid failed
 # clones due to lack of history.
 if ([string]::IsNullOrEmpty($env:DRONE_COMMIT_BRANCH)) {
-	sf
+	sf -flags $null -ref $null
 	Write-Host "+ git checkout -qf ${Env:DRONE_COMMIT_SHA}";
 	iu git checkout -qf ${Env:DRONE_COMMIT_SHA}
 	exit 0
@@ -32,12 +32,12 @@ if ([string]::IsNullOrEmpty($env:DRONE_COMMIT_BRANCH)) {
 # manually triggered in Harness CI Enterprise. If
 # the commit is empty we clone the branch.
 if ([string]::IsNullOrEmpty($env:DRONE_COMMIT_SHA)) {
-	sf ${FLAGS} "+refs/heads/${Env:DRONE_COMMIT_BRANCH}"
+	sf -flags ${FLAGS} -ref "+refs/heads/${Env:DRONE_COMMIT_BRANCH}"
 	Write-Host "+ git checkout -b ${Env:DRONE_COMMIT_BRANCH} origin/${Env:DRONE_COMMIT_BRANCH}";
 	iu git checkout -b ${Env:DRONE_COMMIT_BRANCH} origin/${Env:DRONE_COMMIT_BRANCH}
 	exit 0
 }
 
-sf ${FLAGS} "+refs/heads/${Env:DRONE_COMMIT_BRANCH}"
+sf -flags ${FLAGS} -ref "+refs/heads/${Env:DRONE_COMMIT_BRANCH}"
 Write-Host "+ git checkout ${Env:DRONE_COMMIT_SHA} -b ${Env:DRONE_COMMIT_BRANCH}"
 iu git checkout ${Env:DRONE_COMMIT_SHA} -b ${Env:DRONE_COMMIT_BRANCH}

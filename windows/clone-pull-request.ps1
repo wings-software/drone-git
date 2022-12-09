@@ -16,13 +16,13 @@ if (!(Test-Path .git)) {
 }
 
 if ($Env:PLUGIN_PR_CLONE_STRATEGY -eq "SourceBranch") {
-	sf ${FLAGS} "${Env:DRONE_COMMIT_REF}"
+	sf -flags ${FLAGS} -ref "${Env:DRONE_COMMIT_REF}"
 	Write-Host "+ git checkout ${Env:DRONE_COMMIT_SHA} -b ${Env:DRONE_SOURCE_BRANCH}"
 	iu git checkout ${Env:DRONE_COMMIT_SHA} -b ${Env:DRONE_SOURCE_BRANCH}
 	exit 0
 }
 
-sf ${FLAGS} "+refs/heads/${Env:DRONE_COMMIT_BRANCH}"
+sf -flags ${FLAGS} -ref "+refs/heads/${Env:DRONE_COMMIT_BRANCH}"
 
 if (Test-Path env:DRONE_COMMIT_BEFORE) {
 	# PR clone strategy is merge commit
@@ -33,7 +33,7 @@ if (Test-Path env:DRONE_COMMIT_BEFORE) {
 	iu git checkout $Env:DRONE_COMMIT_BRANCH
 }
 
-sf ${FLAGS} "${Env:DRONE_COMMIT_REF}"
+sf -flags $null -ref "${Env:DRONE_COMMIT_REF}"
 
 Write-Host "+ git merge $Env:DRONE_COMMIT_SHA"
 iu git merge $Env:DRONE_COMMIT_SHA
