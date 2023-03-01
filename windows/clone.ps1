@@ -58,6 +58,7 @@ if ($Env:DRONE_COMMIT_AUTHOR_EMAIL -eq '' -or $Env:DRONE_COMMIT_AUTHOR_EMAIL -eq
 $Env:GIT_COMMITTER_NAME  = $Env:GIT_AUTHOR_NAME
 $Env:GIT_COMMITTER_EMAIL = $Env:GIT_AUTHOR_EMAIL
 
+Write-Host "+ git config --global --add safe.directory $pwd"
 Invoke-Utility git config --global --add safe.directory $pwd
 
 # invoke the sub-script based on the drone event type.
