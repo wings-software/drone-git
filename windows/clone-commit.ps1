@@ -12,6 +12,10 @@ if ($Env:PLUGIN_DEPTH) {
 if (!(Test-Path .git)) {
 	Write-Host '+ git init';
 	iu git init
+
+	Write-Host "+ git config --global --add safe.directory $pwd"
+	iu git config --global --add safe.directory $pwd
+
 	Write-Host "+ git remote add origin $Env:DRONE_REMOTE_URL"
 	iu git remote add origin $Env:DRONE_REMOTE_URL
 }
