@@ -1,7 +1,5 @@
 $ErrorActionPreference = 'Stop';
 
-. "${PSScriptRoot}\utility.ps1"
-
 # HACK: no clue how to set the PATH inside the Dockerfile,
 # so am setting it here instead. This is not idea.
 $Env:PATH += ';C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh'
@@ -57,9 +55,6 @@ if ($Env:DRONE_COMMIT_AUTHOR_EMAIL -eq '' -or $Env:DRONE_COMMIT_AUTHOR_EMAIL -eq
 
 $Env:GIT_COMMITTER_NAME  = $Env:GIT_AUTHOR_NAME
 $Env:GIT_COMMITTER_EMAIL = $Env:GIT_AUTHOR_EMAIL
-
-Write-Host "+ git config --global --add safe.directory $pwd"
-Invoke-Utility git config --global --add safe.directory $pwd
 
 # invoke the sub-script based on the drone event type.
 # TODO we should ultimately look at the ref, since
