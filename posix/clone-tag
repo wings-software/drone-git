@@ -1,8 +1,8 @@
 #!/bin/sh
 
-FLAGS=""
+FLAGS="--no-tags"
 if [[ ! -z "${PLUGIN_DEPTH}" ]]; then
-	FLAGS="--depth=${PLUGIN_DEPTH}"
+	FLAGS="${FLAGS} --depth=${PLUGIN_DEPTH}"
 fi
 
 if [ ! -d .git ]; then
