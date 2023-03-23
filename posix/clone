@@ -47,6 +47,7 @@ if [[ ! -z "${DRONE_SSH_KEY}" ]]; then
 
 	if [[ ! -z "${SSH_KEYSCAN_TIMEOUT}" ]]; then
 		SSH_KEYSCAN_FLAGS="${SSH_KEYSCAN_FLAGS} -T ${SSH_KEYSCAN_TIMEOUT}"
+		echo "using ssh flag ${SSH_KEYSCAN_FLAGS}"
 	fi
 	ssh-keyscan -H ${SSH_KEYSCAN_FLAGS} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > /etc/ssh/ssh_known_hosts 2> /dev/null
 
