@@ -1,0 +1,5 @@
+run:
+  bash:
+    path: posix/clone
+  pwsh:
+    path: windows/clone.ps1
