@@ -1,7 +1,7 @@
 #!/bin/sh
 
 FLAGS=""
-if [[ ! -z "${PLUGIN_DEPTH}" ]]; then
+if [ ! -z "${PLUGIN_DEPTH}" ]; then
 	FLAGS="--depth=${PLUGIN_DEPTH}"
 fi
 
@@ -17,7 +17,7 @@ fi
 # is empty we checkout the sha directly. Note that
 # we intentially omit depth flags to avoid failed
 # clones due to lack of history.
-if [[ -z "${DRONE_COMMIT_BRANCH}" ]]; then
+if [ -z "${DRONE_COMMIT_BRANCH}" ]; then
 	set -e
 	set -x
 	git fetch origin
@@ -28,7 +28,7 @@ fi
 # the commit sha may be empty for builds that are
 # manually triggered in Harness CI Enterprise. If
 # the commit is empty we clone the branch.
-if [[ -z "${DRONE_COMMIT_SHA}" ]]; then
+if [ -z "${DRONE_COMMIT_SHA}" ]; then
 	set -e
 	set -x
 	git fetch ${FLAGS} origin +refs/heads/${DRONE_COMMIT_BRANCH}:

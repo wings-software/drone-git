@@ -1,7 +1,7 @@
 #!/bin/sh
 
 FLAGS=""
-if [[ ! -z "${PLUGIN_DEPTH}" ]]; then
+if [ ! -z "${PLUGIN_DEPTH}" ]; then
 	FLAGS="--depth=${PLUGIN_DEPTH}"
 fi
 
@@ -25,7 +25,7 @@ fi
 # PR clone strategy is merge commit
 
 targetRef=${DRONE_COMMIT_BRANCH}
-if [[ ! -z "${DRONE_COMMIT_BEFORE}" ]]; then
+if [ ! -z "${DRONE_COMMIT_BEFORE}" ]; then
 	targetRef="${DRONE_COMMIT_BEFORE} -b ${DRONE_COMMIT_BRANCH}"
 fi
 
