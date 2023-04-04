@@ -51,7 +51,7 @@ if [[ ! -z "${DRONE_SSH_KEY}" ]]; then
 	fi
 
 	if [[ ! -z "${OVERRIDE_KNOWN_HOSTS}" ]]; then
-		echo "using mounted known hosts file ${SSH_KEYSCAN_FLAGS}"
+		echo "using mounted known hosts file"
 		echo ${OVERRIDE_KNOWN_HOSTS} > /etc/ssh/ssh_known_hosts
 	else 
 		ssh-keyscan -H ${SSH_KEYSCAN_FLAGS} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > /etc/ssh/ssh_known_hosts
