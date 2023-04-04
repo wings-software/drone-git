@@ -207,6 +207,51 @@ func TestPullRequest(t *testing.T) {
 	}
 }
 
+func TestCloneDir(t *testing.T) {
+	remote := "https://github.com/wings-software/drone-git"
+
+	local, err := ioutil.TempDir("", "test")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer os.Remove(local)
+
+	bin, err := filepath.Abs("clone-dir")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	cmd := exec.Command(bin)
+	cmd.Dir = local
+	cmd.Env = []string{
+		fmt.Sprintf("DRONE_BUILD_EVENT=%s", "dir"),
+		fmt.Sprintf("DRONE_DL_DIRECTORY=%s", "posix"),
+		fmt.Sprintf("DRONE_WORKSPACE=%s", local),
+		fmt.Sprintf("DRONE_REMOTE_URL=%s", remote),
+	}
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Error(err)
+		t.Log(string(out))
+		return
+	}
+	t.Log(string(out))
+
+	fileList, err := getFileList(local, "posix")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	split := strings.Split(fileList, "\n")
+
+	if want, got := 10, len(split); got != want {
+		t.Errorf("Want files count %d, got %d", want, got)
+	}
+}
+
 func getBranch(path string) (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
 	cmd.Dir = path
@@ -216,6 +261,13 @@ func getBranch(path string) (string, error) {
 
 func getCommit(path string) (string, error) {
 	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = path
+	out, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(out)), err
+}
+
+func getFileList(path string, dir string) (string, error) {
+	cmd := exec.Command("ls", "-1", dir)
 	cmd.Dir = path
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
