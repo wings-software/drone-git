@@ -93,6 +93,9 @@ pull_request)
 tag)
 	clone-tag
 	;;
+dir)
+	clone-dir
+	;;
 *)
 	clone-commit
 	;;

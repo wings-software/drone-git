@@ -1,0 +1,21 @@
+#!/bin/sh
+
+if [ ! -d .git ]; then
+	set -x
+	git init
+	git remote add origin ${DRONE_REMOTE_URL}
+	set +x
+fi
+
+set -e
+set -x
+
+git config core.sparseCheckout true
+if [[ -n "${DRONE_DL_DIRECTORY}" ]]; then
+	echo ${DRONE_DL_DIRECTORY} > .git/info/sparse-checkout
+fi
+
+git pull origin master
+ls -ltr
+cd ${DRONE_DL_DIRECTORY}
+ls -ltr
