@@ -47,16 +47,9 @@ if [[ ! -z "${DRONE_SSH_KEY}" ]]; then
 
 	if [[ ! -z "${SSH_KEYSCAN_TIMEOUT}" ]]; then
 		SSH_KEYSCAN_FLAGS="${SSH_KEYSCAN_FLAGS} -T ${SSH_KEYSCAN_TIMEOUT}"
-		echo "using ssh flag ${SSH_KEYSCAN_FLAGS}"
 	fi
 
-	if [[ ! -z "${OVERRIDE_KNOWN_HOSTS}" ]]; then
-		echo "using mounted known hosts file"
-		echo ${OVERRIDE_KNOWN_HOSTS} > /etc/ssh/ssh_known_hosts
-	else 
-		ssh-keyscan -H ${SSH_KEYSCAN_FLAGS} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > /etc/ssh/ssh_known_hosts
-		echo "completed ssh-keyscan command"
-	fi
+	ssh-keyscan -H ${SSH_KEYSCAN_FLAGS} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > /etc/ssh/ssh_known_hosts
 
 	export GIT_SSH_COMMAND="ssh -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
 fi
