@@ -37,13 +37,18 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 	touch ${HOME}/.ssh/known_hosts
 	chmod 600 ${HOME}/.ssh/known_hosts
 
-	SSH_KEYSCAN_FLAGS=""
+	SSH_PORT_FLAG=""
 	if [[ ! -z "${DRONE_NETRC_PORT}" ]]; then
-		SSH_KEYSCAN_FLAGS="-p ${DRONE_NETRC_PORT}"
+		SSH_PORT_FLAG="-p ${DRONE_NETRC_PORT}"
 	fi
-	ssh-keyscan -H ${SSH_KEYSCAN_FLAGS} ${DRONE_NETRC_MACHINE} > /etc/ssh/ssh_known_hosts 2> /dev/null
 
-	export GIT_SSH_COMMAND="ssh -i ${HOME}/.ssh/id_rsa ${SSH_KEYSCAN_FLAGS} -F /dev/null"
+	SSH_KEYSCAN_TIMEOUT_FLAG=""
+	if [[ ! -z "${OVERRIDE_SSH_KEYSCAN_TIMEOUT}" ]]; then
+		SSH_KEYSCAN_TIMEOUT_FLAG="-T ${OVERRIDE_SSH_KEYSCAN_TIMEOUT}"
+	fi
+	
+	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > /etc/ssh/ssh_known_hosts 2> /dev/null
+	export GIT_SSH_COMMAND="ssh -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
 fi
 
 # AWS codecommit support using AWS access key & secret key
