@@ -38,12 +38,12 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 	chmod 600 ${HOME}/.ssh/known_hosts
 
 	SSH_PORT_FLAG=""
-	if [[ ! -z "${DRONE_NETRC_PORT}" ]]; then
+	if [ ! -z "${DRONE_NETRC_PORT}" ]; then
 		SSH_PORT_FLAG="-p ${DRONE_NETRC_PORT}"
 	fi
 
 	SSH_KEYSCAN_TIMEOUT_FLAG=""
-	if [[ ! -z "${OVERRIDE_SSH_KEYSCAN_TIMEOUT}" ]]; then
+	if [ ! -z "${PLUGIN_SSH_KEYSCAN_TIMEOUT}" ]; then
 		SSH_KEYSCAN_TIMEOUT_FLAG="-T ${OVERRIDE_SSH_KEYSCAN_TIMEOUT}"
 	fi
 	
