@@ -1,6 +1,6 @@
 # drone-git
 
-Drone plugin to clone `git` repositories.
+Drone plugin to clone `git` repositories. 
 
 ## Build
 
