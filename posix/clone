@@ -103,3 +103,10 @@ tag)
 	clone-commit
 	;;
 esac
+
+for path in ${DRONE_OUTPUT_FILE_PATHS_CONTENT//,/ }
+do
+    # call your procedure/other scripts here below
+    FILE_CONTENT=`cat $path`
+    echo "$path=$FILE_CONTENT" >> $DRONE_OUTPUT
+done
