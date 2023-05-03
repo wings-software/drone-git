@@ -46,7 +46,7 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 	if [ ! -z "${PLUGIN_SSH_KEYSCAN_TIMEOUT}" ]; then
 		SSH_KEYSCAN_TIMEOUT_FLAG="-T ${PLUGIN_SSH_KEYSCAN_TIMEOUT}"
 	fi
-	
+
 	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > /etc/ssh/ssh_known_hosts 2> /dev/null
 	export GIT_SSH_COMMAND="ssh -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
 fi
@@ -104,9 +104,18 @@ tag)
 	;;
 esac
 
-for path in ${DRONE_OUTPUT_FILE_PATHS_CONTENT//,/ }
-do
-    # call your procedure/other scripts here below
-    FILE_CONTENT=`cat $path`
-    echo "$path=$FILE_CONTENT" >> $DRONE_OUTPUT
-done
+if [[ ! -z "$DRONE_OUTPUT_FILE_PATHS_CONTENT" ]]
+then
+  for filepath in ${DRONE_OUTPUT_FILE_PATHS_CONTENT//,/ }
+  do
+      # call your procedure/other scripts here below
+      FILE_CONTENT="$(<"$filepath")"
+      output=""
+      while IFS= read -r line
+      do
+        output=`printf "%s%s%s" $output $line '\n'`
+      done < "$filepath"
+      printf "writing drone outputs with file path content %s=%s" $filepath $output
+      printf "%s=%s" $filepath $output >> $DRONE_OUTPUT
+  done
+fi
