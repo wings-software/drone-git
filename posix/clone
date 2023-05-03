@@ -106,16 +106,13 @@ esac
 
 if [[ ! -z "$DRONE_OUTPUT_FILE_PATHS_CONTENT" ]]
 then
-  for filepath in ${DRONE_OUTPUT_FILE_PATHS_CONTENT//,/ }
+  for FILE_PATH in ${DRONE_OUTPUT_FILE_PATHS_CONTENT//,/ }
   do
       # call your procedure/other scripts here below
-      FILE_CONTENT="$(<"$filepath")"
-      output=""
-      while IFS= read -r line
-      do
-        output=`printf "%s%s%s" $output $line '\n'`
-      done < "$filepath"
-      printf "writing drone outputs with file path content %s=%s" $filepath $output
-      printf "%s=%s" $filepath $output >> $DRONE_OUTPUT
+      FILE_CONTENT="$(<"$FILE_PATH")"
+      FILE_PATH_BASE_64=`echo $FILE_PATH | base64`
+      FILE_CONTENT_BASE_64=`echo $FILE_CONTENT | base64`
+      printf "writing drone outputs with file path content %s=%s" $FILE_PATH $FILE_CONTENT_BASE_64
+      printf "%s=%s"  $FILE_PATH $FILE_CONTENT_BASE_64 >> $DRONE_OUTPUT
   done
 fi
