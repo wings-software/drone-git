@@ -104,14 +104,14 @@ tag)
 	;;
 esac
 
-if [[ ! -z "$DRONE_OUTPUT_FILE_PATHS_CONTENT" ]]
+if [[ ! -z "$PLUGIN_OUTPUT_FILE_PATHS_CONTENT" ]]
 then
-  for FILE_PATH in ${DRONE_OUTPUT_FILE_PATHS_CONTENT//,/ }
+  for FILE_PATH in ${PLUGIN_OUTPUT_FILE_PATHS_CONTENT//,/ }
   do
       # call your procedure/other scripts here below
       FILE_CONTENT="$(<"$FILE_PATH")"
       FILE_CONTENT_BASE_64=`echo $FILE_CONTENT | base64`
-      printf "writing drone outputs with file path content %s=%s" $FILE_PATH $FILE_CONTENT_BASE_64
-      printf "%s=%s"  $FILE_PATH $FILE_CONTENT_BASE_64 >> $DRONE_OUTPUT
+      echo "writing drone outputs with file path content $FILE_PATH=$FILE_CONTENT_BASE_64"
+      echo "$FILE_PATH=$FILE_CONTENT_BASE_64" >> $DRONE_OUTPUT
   done
 fi
