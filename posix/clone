@@ -108,10 +108,8 @@ if [[ ! -z "$PLUGIN_OUTPUT_FILE_PATHS_CONTENT" ]]
 then
   for FILE_PATH in ${PLUGIN_OUTPUT_FILE_PATHS_CONTENT//,/ }
   do
-      # call your procedure/other scripts here below
       FILE_CONTENT="$(<"$FILE_PATH")"
       FILE_CONTENT_BASE_64=`echo $FILE_CONTENT | base64`
-      echo "writing drone outputs with file path content $FILE_PATH=$FILE_CONTENT_BASE_64"
       echo "$FILE_PATH=$FILE_CONTENT_BASE_64" >> $DRONE_OUTPUT
   done
 fi
