@@ -1,6 +1,7 @@
 #!/bin/sh
 
 # force the home directory path.
+set -x
 if [ "$HOME" != "/home/drone" ]; then
 	if [ -d "/home/drone" ]; then
 		echo "[DEBUG] setting default home directory"
@@ -44,8 +45,10 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 	if [ ! -z "${PLUGIN_SSH_KEYSCAN_TIMEOUT}" ]; then
 		SSH_KEYSCAN_TIMEOUT_FLAG="-T ${PLUGIN_SSH_KEYSCAN_TIMEOUT}"
 	fi
-
+	
 	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2> /dev/null
+	ls ${HOME}/.ssh/known_hosts
+	cat ~/.ssh/known_hosts
 	chmod 600 ${HOME}/.ssh/known_hosts
 	export GIT_SSH_COMMAND="ssh -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
 fi
@@ -102,13 +105,3 @@ tag)
 	clone-commit
 	;;
 esac
-
-if [[ ! -z "$PLUGIN_OUTPUT_FILE_PATHS_CONTENT" ]]
-then
-  for FILE_PATH in ${PLUGIN_OUTPUT_FILE_PATHS_CONTENT//,/ }
-  do
-      FILE_CONTENT="$(<"$FILE_PATH")"
-      FILE_CONTENT_BASE_64=`echo $FILE_CONTENT | base64`
-      echo "$FILE_PATH=$FILE_CONTENT_BASE_64" >> $DRONE_OUTPUT
-  done
-fi
