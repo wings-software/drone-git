@@ -30,12 +30,12 @@ fi
 # known hosts file.
 
 if [ ! -z "${DRONE_SSH_KEY}" ]; then
-	mkdir -p ~/.ssh
-	echo "$DRONE_SSH_KEY" > ~/.ssh/id_rsa
-	chmod 600 ~/.ssh/id_rsa
+	mkdir -p ${HOME}/.ssh
+	echo "$DRONE_SSH_KEY" > ${HOME}/.ssh/id_rsa
+	chmod 600 ${HOME}/.ssh/id_rsa
 
-	touch ~/.ssh/known_hosts
-	chmod 600 ~/.ssh/known_hosts
+	touch ${HOME}/.ssh/known_hosts
+	chmod 600 ${HOME}/.ssh/known_hosts
 
 	SSH_PORT_FLAG=""
 	if [ ! -z "${DRONE_NETRC_PORT}" ]; then
@@ -47,12 +47,8 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 		SSH_KEYSCAN_TIMEOUT_FLAG="-T ${PLUGIN_SSH_KEYSCAN_TIMEOUT}"
 	fi
 	
-	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ~/.ssh/known_hosts 2> /dev/null
-	ls ~/.ssh/known_hosts
-	ls ${HOME}/.ssh/known_hosts
-	cat ~/.ssh/known_hosts
-	echo $HOME
-	export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=~/.ssh/known_hosts -i ~/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
+	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2> /dev/null
+	export GIT_SSH_COMMAND="ssh -v -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
 fi
 
 # AWS codecommit support using AWS access key & secret key
