@@ -45,7 +45,7 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 	if [ ! -z "${PLUGIN_SSH_KEYSCAN_TIMEOUT}" ]; then
 		SSH_KEYSCAN_TIMEOUT_FLAG="-T ${PLUGIN_SSH_KEYSCAN_TIMEOUT}"
 	fi
-	
+
 	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2> /dev/null
 	export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
 fi
