@@ -1,7 +1,6 @@
 #!/bin/sh
 
 # force the home directory path.
-set -x
 if [ "$HOME" != "/home/drone" ]; then
 	if [ -d "/home/drone" ]; then
 		echo "[DEBUG] setting default home directory"
@@ -47,8 +46,6 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 	fi
 
 	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2> /dev/null
-	ls ${HOME}/.ssh/known_hosts
-	cat ~/.ssh/known_hosts
 	chmod 600 ${HOME}/.ssh/known_hosts
 	export GIT_SSH_COMMAND="ssh -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
 fi
