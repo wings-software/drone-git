@@ -1,7 +1,6 @@
 #!/bin/sh
 
 # force the home directory path.
-set -x
 if [ "$HOME" != "/home/drone" ]; then
 	if [ -d "/home/drone" ]; then
 		echo "[DEBUG] setting default home directory"
@@ -48,7 +47,7 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 	fi
 	
 	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2> /dev/null
-	export GIT_SSH_COMMAND="ssh -v -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
+	export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
 fi
 
 # AWS codecommit support using AWS access key & secret key
