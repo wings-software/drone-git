@@ -51,6 +51,8 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 	ls ${HOME}/.ssh/known_hosts
 	cat ~/.ssh/known_hosts
 	chmod 600 ~/.ssh/known_hosts
+	echo $HOME
+	HOME=/home/ubuntu
 	export GIT_SSH_COMMAND="ssh -v -i ~/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
 fi
 
