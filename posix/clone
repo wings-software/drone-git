@@ -35,6 +35,7 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 	chmod 600 ~/.ssh/id_rsa
 
 	touch ~/.ssh/known_hosts
+	chmod 600 ~/.ssh/known_hosts
 
 	SSH_PORT_FLAG=""
 	if [ ! -z "${DRONE_NETRC_PORT}" ]; then
@@ -50,10 +51,8 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 	ls ~/.ssh/known_hosts
 	ls ${HOME}/.ssh/known_hosts
 	cat ~/.ssh/known_hosts
-	chmod 600 ~/.ssh/known_hosts
 	echo $HOME
-	HOME=/home/ubuntu
-	export GIT_SSH_COMMAND="ssh -v -i ~/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
+	export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=~/.ssh/known_hosts -i ~/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
 fi
 
 # AWS codecommit support using AWS access key & secret key
