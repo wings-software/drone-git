@@ -22,7 +22,7 @@ password $Env:DRONE_NETRC_PASSWORD
 }
 
 if ($Env:DRONE_SSH_KEY) {
-    mkdir C:\.ssh
+    mkdir C:\.ssh  2>nul
     echo $Env:DRONE_SSH_KEY > C:\.ssh\id_rsa
 
     # $Env:SSH_KEYSCAN_FLAGS=""
