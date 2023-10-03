@@ -111,6 +111,11 @@ then
   do
       FILE_CONTENT="$(<"$FILE_PATH")"
       FILE_CONTENT_BASE_64=`echo $FILE_CONTENT | base64`
-      echo "$FILE_PATH=$FILE_CONTENT_BASE_64" >> $DRONE_OUTPUT
+	  # We are using github.com/joho/godotenv to fetch a map of env variables from plugins.
+	  # It considers key2 as new env variable in the next yaml file content FILE_CONTENT="key1: value, key2: value". 
+	  # Hence, we need to base64 encode file content and replace == with -- in encoded string, because the above lib doesn't allow ==
+	  # while fetching a map of env variables from plugins.
+	  FIXED_FILE_CONTENT=`echo $FILE_CONTENT_BASE_64 | tr = -`
+      echo "$FILE_PATH=$FIXED_FILE_CONTENT" >> $DRONE_OUTPUT
   done
 fi
