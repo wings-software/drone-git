@@ -22,3 +22,9 @@ manifests:
       architecture: amd64
       os: windows
       version: 1809
+  -
+    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-ltsc2022-amd64
+    platform:
+      architecture: amd64
+      os: windows
+      version: ltsc2022
