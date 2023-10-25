@@ -13,7 +13,7 @@ RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tl
 RUN Add-WindowsCapability -Online -Name OpenSSH.Client*
 
 
-FROM mcr.microsoft.com/powershell:nanoserver-ltsc2022
+FROM mcr.microsoft.com/powershell:windowsservercore-ltsc2022
 COPY --from=git /git /git
 
 COPY --from=git C:\Windows\System32\OpenSSH\ /openssh
