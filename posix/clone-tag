@@ -8,7 +8,6 @@ fi
 if [ ! -d .git ]; then
 	set -x
 	git init
-
 	git remote add origin ${DRONE_REMOTE_URL}
 	set +x
 fi
