@@ -8,8 +8,15 @@ fi
 if [ ! -d .git ]; then
 	set -x
 	git init
+
 	git remote add origin ${DRONE_REMOTE_URL}
 	set +x
+fi
+
+if [ -n "$DRONE_HTTP_PROXY_URL" ] && [ -n "$DRONE_HTTP_PROXY_PORT" ]; then
+    set -x
+    git config --global http.proxy "$DRONE_HTTP_PROXY_URL:$DRONE_HTTP_PROXY_PORT"
+    set +x
 fi
 
 set -e
