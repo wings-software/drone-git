@@ -21,9 +21,9 @@ if (!(Test-Path .git)) {
 	iu git remote add origin $Env:DRONE_REMOTE_URL
 }
 
-if (![string]::IsNullOrEmpty($env:DRONE_HTTP_PROXY_URL) -and ![string]::IsNullOrEmpty($env:DRONE_HTTP_PROXY_PORT)) {
+if (![string]::IsNullOrEmpty($Env:DRONE_HTTP_PROXY_URL) -and ![string]::IsNullOrEmpty($Env:DRONE_HTTP_PROXY_PORT)) {
     Write-Host "+ git config --global --global http.proxy $Env:DRONE_HTTP_PROXY_URL:$Env:DRONE_HTTP_PROXY_PORT "
-    iu git config --global http.proxy "$($env:DRONE_HTTP_PROXY_URL):$($env:DRONE_HTTP_PROXY_PORT)"
+    iu git config --global http.proxy "$($Env:DRONE_HTTP_PROXY_URL):$($Env:DRONE_HTTP_PROXY_PORT)"
 }
 
 if ($Env:PLUGIN_PR_CLONE_STRATEGY -eq "SourceBranch") {
