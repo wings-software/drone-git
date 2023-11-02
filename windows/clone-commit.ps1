@@ -20,6 +20,11 @@ if (!(Test-Path .git)) {
 	iu git remote add origin $Env:DRONE_REMOTE_URL
 }
 
+if (![string]::IsNullOrEmpty($Env:DRONE_HTTP_PROXY_URL) -and ![string]::IsNullOrEmpty($Env:DRONE_HTTP_PROXY_PORT)) {
+    Write-Host "+ git config --global --global http.proxy $Env:DRONE_HTTP_PROXY_URL:$Env:DRONE_HTTP_PROXY_PORT "
+    iu git config --global http.proxy "$($Env:DRONE_HTTP_PROXY_URL):$($Env:DRONE_HTTP_PROXY_PORT)"
+}
+
 # the branch may be empty for certain event types,
 # such as github deployment events. If the branch
 # is empty we checkout the sha directly. Note that

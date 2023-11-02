@@ -20,6 +20,11 @@ if (!(Test-Path .git)) {
 	iu git remote add origin "$Env:DRONE_REMOTE_URL"
 }
 
+if (![string]::IsNullOrEmpty($Env:DRONE_HTTP_PROXY_URL) -and ![string]::IsNullOrEmpty($Env:DRONE_HTTP_PROXY_PORT)) {
+    Write-Host "+ git config --global --global http.proxy $Env:DRONE_HTTP_PROXY_URL:$Env:DRONE_HTTP_PROXY_PORT "
+    iu git config --global http.proxy "$($Env:DRONE_HTTP_PROXY_URL):$($Env:DRONE_HTTP_PROXY_PORT)"
+}
+
 sf -flags ${FLAGS} -ref "+refs/tags/${Env:DRONE_TAG}"
 Write-Host "+ git checkout -qf ${Env:FETCH_HEAD}";
 iu git checkout -qf FETCH_HEAD
