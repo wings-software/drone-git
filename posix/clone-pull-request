@@ -12,9 +12,9 @@ if [ ! -d .git ]; then
 	set +x
 fi
 
-if [ -n "$DRONE_HTTP_PROXY_URL" ] && [ -n "$DRONE_HTTP_PROXY_PORT" ]; then
+if [ -n "$DRONE_HTTP_PROXY" ]; then
   set -x
-  git config --global http.proxy "$DRONE_HTTP_PROXY_URL:$DRONE_HTTP_PROXY_PORT"
+  git config --global http.proxy "$DRONE_HTTP_PROXY"
   set +x
 fi
 
