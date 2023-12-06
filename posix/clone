@@ -1,7 +1,5 @@
 #!/bin/sh
 
-set -e
-
 # force the home directory path.
 if [ "$HOME" != "/home/drone" ]; then
 	if [ -d "/home/drone" ]; then
