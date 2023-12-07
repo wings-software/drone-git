@@ -8,6 +8,7 @@ fi
 if [ ! -d .git ]; then
 	set -x
 	git init
+	git config --global --add safe.directory '*'
 	git remote add origin ${DRONE_REMOTE_URL}
 	set +x
 fi
