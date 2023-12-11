@@ -13,9 +13,9 @@ if [ ! -d .git ]; then
 	set +x
 fi
 
-if [ -n "$DRONE_HTTP_PROXY" ]; then
+if [ -n "$HARNESS_HTTPS_PROXY" ]; then
   set -x
-  git config --global http.proxy "$DRONE_HTTP_PROXY"
+  git config --global https.proxy "$HARNESS_HTTPS_PROXY"
   set +x
 fi
 

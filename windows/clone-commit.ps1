@@ -20,9 +20,9 @@ if (!(Test-Path .git)) {
 	iu git remote add origin $Env:DRONE_REMOTE_URL
 }
 
-if (![string]::IsNullOrEmpty($Env:DRONE_HTTP_PROXY)) {
-    Write-Host "+ git config --global --global http.proxy $Env:DRONE_HTTP_PROXY "
-    iu git config --global http.proxy "$($Env:DRONE_HTTP_PROXY)"
+if (![string]::IsNullOrEmpty($Env:HARNESS_HTTPS_PROXY)) {
+    Write-Host "+ git config --global --global https.proxy $Env:HARNESS_HTTPS_PROXY "
+    iu git config --global https.proxy "$($Env:HARNESS_HTTPS_PROXY)"
 }
 
 # the branch may be empty for certain event types,
