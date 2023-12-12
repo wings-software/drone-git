@@ -21,8 +21,8 @@ if (!(Test-Path .git)) {
 }
 
 if (![string]::IsNullOrEmpty($Env:HARNESS_HTTPS_PROXY)) {
-    Write-Host "+ git config --global --global https.proxy $Env:HARNESS_HTTPS_PROXY "
-    iu git config --global https.proxy "$($Env:HARNESS_HTTPS_PROXY)"
+    Write-Host "+ git config --global --global http.proxy $Env:HARNESS_HTTPS_PROXY "
+    iu git config --global http.proxy "$($Env:HARNESS_HTTPS_PROXY)"
 }
 
 sf -flags ${FLAGS} -ref "+refs/tags/${Env:DRONE_TAG}"
