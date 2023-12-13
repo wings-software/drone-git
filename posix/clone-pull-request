@@ -13,10 +13,9 @@ if [ ! -d .git ]; then
 	set +x
 fi
 
-if [ -n "$HARNESS_HTTP_PROXY" ] && [ -n "$HARNESS_HTTPS_PROXY" ]; then
+if [ "$HARNESS_GIT_PROXY" = "true" ] && [ -n "$HARNESS_HTTPS_PROXY" ]; then
   set -x
-  git config --global http.proxy "$HARNESS_HTTP_PROXY"
-  git config --global https.proxy "$HARNESS_HTTPS_PROXY"
+  git config --global http.proxy "$HARNESS_HTTPS_PROXY"
   set +x
 fi
 
