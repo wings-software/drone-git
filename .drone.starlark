@@ -37,7 +37,7 @@ def linux(arch):
     'steps': [
       {
         'name': 'build',
-        'image': 'golang:1.10',
+        'image': 'golang:1.21',
         'commands': [
           'cd posix',
           'tar -xf fixtures.tar -C /',
