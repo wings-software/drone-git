@@ -5,3 +5,5 @@ LICENSE
 README.md
 */fixtures*
 posix/*.go
+# Exclude specific file 'fixtures.sh' from being ignored
+!posix/fixtures.sh
