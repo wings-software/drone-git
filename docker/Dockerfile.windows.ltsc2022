@@ -17,7 +17,6 @@ FROM mcr.microsoft.com/powershell:windowsservercore-ltsc2022
 COPY --from=git /git /git
 
 COPY --from=git C:\Windows\System32\OpenSSH\ /openssh
-COPY --from=core /windows/system32/netapi32.dll /windows/system32/netapi32.dll
 
 ADD windows/* /bin/
 
