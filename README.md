@@ -2,6 +2,12 @@
 
 Drone plugin to clone `git` repositories.
 
+Run the following script to install git-leaks support to this repo.
+```
+chmod +x ./git-hooks/install.sh
+./git-hooks/install.sh
+```
+
 ## Build
 
 Build the Docker image with the following commands:
