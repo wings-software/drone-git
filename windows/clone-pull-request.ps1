@@ -21,6 +21,11 @@ if (!(Test-Path .git)) {
 	iu git remote add origin $Env:DRONE_REMOTE_URL
 }
 
+if ($env:HARNESS_GIT_PROXY -eq "true" -and -not [string]::IsNullOrEmpty($env:HARNESS_HTTPS_PROXY)) {
+    Write-Host "+ git config --global http.proxy $env:HARNESS_HTTPS_PROXY"
+    iu git config --global http.proxy $env:HARNESS_HTTPS_PROXY
+}
+
 if ($Env:PLUGIN_PR_CLONE_STRATEGY -eq "SourceBranch") {
 	sf -flags ${FLAGS} -ref "${Env:DRONE_COMMIT_REF}"
 	Write-Host "+ git checkout ${Env:DRONE_COMMIT_SHA} -b ${Env:DRONE_SOURCE_BRANCH}"
