@@ -20,6 +20,10 @@ if (!(Test-Path .git)) {
 	iu git remote add origin "$Env:DRONE_REMOTE_URL"
 }
 
+if ($env:HARNESS_GIT_PROXY -eq "true" -and -not [string]::IsNullOrEmpty($env:HARNESS_HTTPS_PROXY)) {
+    iu git config --global http.proxy $env:HARNESS_HTTPS_PROXY
+}
+
 sf -flags ${FLAGS} -ref "+refs/tags/${Env:DRONE_TAG}"
 Write-Host "+ git checkout -qf ${Env:FETCH_HEAD}";
 iu git checkout -qf FETCH_HEAD
