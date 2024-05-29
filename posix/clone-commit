@@ -4,6 +4,10 @@ FLAGS=""
 if [ ! -z "${PLUGIN_DEPTH}" ]; then
 	FLAGS="--depth=${PLUGIN_DEPTH}"
 fi
+echo "printing env variables"
+env
+echo "printing something variable"
+echo $something
 
 if [ ! -d .git ]; then
 	set -x
