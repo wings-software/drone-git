@@ -7,6 +7,12 @@ RUN curl -L https://github.com/git-lfs/git-lfs/releases/download/v3.5.1/git-lfs-
 
 ADD posix/clone posix/clone-commit posix/clone-pull-request posix/clone-tag posix/fixtures.sh /usr/local/bin/
 RUN chmod -R 777 /etc/ssh
+
+# Remove unnecessary SSL keys
+RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
+          /usr/share/doc/perl-Net-SSLeay/examples/server_key.pem
+
+
 RUN groupadd drone && adduser -g drone -s /bin/sh -u 1000 drone
 USER drone:drone
 RUN chmod -R 777 /home/drone
