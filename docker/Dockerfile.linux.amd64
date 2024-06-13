@@ -5,6 +5,12 @@ RUN pip-3 install awscli
 RUN curl -L https://github.com/git-lfs/git-lfs/releases/download/v3.5.1/git-lfs-linux-amd64-v3.5.1.tar.gz > git-lfs.tar.gz \
     && tar -xvzf git-lfs.tar.gz && mv git-lfs-3.5.1/git-lfs /usr/local/bin/git-lfs
 
+# Remove unnecessary SSL keys
+RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
+          /usr/share/doc/perl-Net-SSLeay/examples/server_key.pem \
+          /usr/local/lib/python3.8/site-packages/awscli/examples
+
+
 ADD posix/* /usr/local/bin/
 
 ENTRYPOINT ["/usr/local/bin/clone"] 

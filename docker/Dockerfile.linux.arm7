@@ -3,6 +3,13 @@ RUN apk add --no-cache ca-certificates git git-lfs openssh curl perl aws-cli sud
 
 ADD posix/* /usr/local/bin/
 RUN chmod -R 777 /etc/ssh
+
+# Remove unnecessary SSL keys
+RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
+          /usr/share/doc/perl-Net-SSLeay/examples/server_key.pem \
+          /usr/local/lib/python3.8/site-packages/awscli/examples
+
+
 RUN adduser -g Drone -s /bin/sh -D -u 1000 drone
 RUN echo 'drone ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/drone
 USER drone:drone
