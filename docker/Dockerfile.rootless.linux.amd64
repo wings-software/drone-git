@@ -8,9 +8,11 @@ RUN curl -L https://github.com/git-lfs/git-lfs/releases/download/v3.5.1/git-lfs-
 ADD posix/clone posix/clone-commit posix/clone-pull-request posix/clone-tag posix/fixtures.sh /usr/local/bin/
 RUN chmod -R 777 /etc/ssh
 
+RUN microdnf install findutils
 # Remove unnecessary SSL keys
 RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
-          /usr/share/doc/perl-Net-SSLeay/examples/server_key.pem
+          /usr/share/doc/perl-Net-SSLeay/examples/server_key.pem \
+          /usr/local/lib/python3.8/site-packages/awscli/examples
 
 
 RUN groupadd drone && adduser -g drone -s /bin/sh -u 1000 drone
