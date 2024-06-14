@@ -8,7 +8,8 @@ RUN curl -L https://github.com/git-lfs/git-lfs/releases/download/v3.5.1/git-lfs-
 # Remove unnecessary SSL keys
 RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
           /usr/share/doc/perl-Net-SSLeay/examples/server_key.pem \
-          /usr/local/lib/python3.8/site-packages/awscli/examples
+          /usr/local/lib/python3.8/site-packages/awscli/examples \
+          /usr/local/lib/python3.8/site-packages/awscli/topics
 
 
 ADD posix/* /usr/local/bin/
