@@ -6,23 +6,7 @@ Set-Alias sf Start-Fetch
 
 Set-Variable -Name "FLAGS" -Value ""
 if ($Env:PLUGIN_DEPTH) {
-    Set-Variable -Name "FLAGS" -Value "--depth=$Env:PLUGIN_DEPTH" 
-}
-
-if (!(Test-Path .git)) {
-	Write-Host '+ git init';
-	iu git init
-
-	Write-Host "+ git config --global --add safe.directory *"
-	iu git config --global --add safe.directory '*'
-
-	Write-Host "+ git remote add origin $Env:DRONE_REMOTE_URL"
-	iu git remote add origin $Env:DRONE_REMOTE_URL
-}
-
-if ($env:HARNESS_GIT_PROXY -eq "true" -and -not [string]::IsNullOrEmpty($env:HARNESS_HTTPS_PROXY)) {
-    Write-Host "+ git config --global http.proxy $env:HARNESS_HTTPS_PROXY"
-    iu git config --global http.proxy $env:HARNESS_HTTPS_PROXY
+	Set-Variable -Name "FLAGS" -Value "--depth=$Env:PLUGIN_DEPTH" 
 }
 
 # the branch may be empty for certain event types,
@@ -44,9 +28,8 @@ if ([string]::IsNullOrEmpty($env:DRONE_COMMIT_SHA)) {
 	sf -flags ${FLAGS} -ref "+refs/heads/${Env:DRONE_COMMIT_BRANCH}"
 	Write-Host "+ git checkout -b ${Env:DRONE_COMMIT_BRANCH} origin/${Env:DRONE_COMMIT_BRANCH}";
 	iu git checkout -b ${Env:DRONE_COMMIT_BRANCH} origin/${Env:DRONE_COMMIT_BRANCH}
-	exit 0
+}else{
+	sf -flags ${FLAGS} -ref "+refs/heads/${Env:DRONE_COMMIT_BRANCH}"
+	Write-Host "+ git checkout ${Env:DRONE_COMMIT_SHA} -b ${Env:DRONE_COMMIT_BRANCH}"
+	iu git checkout ${Env:DRONE_COMMIT_SHA} -b ${Env:DRONE_COMMIT_BRANCH}
 }
-
-sf -flags ${FLAGS} -ref "+refs/heads/${Env:DRONE_COMMIT_BRANCH}"
-Write-Host "+ git checkout ${Env:DRONE_COMMIT_SHA} -b ${Env:DRONE_COMMIT_BRANCH}"
-iu git checkout ${Env:DRONE_COMMIT_SHA} -b ${Env:DRONE_COMMIT_BRANCH}

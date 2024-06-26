@@ -1,0 +1,51 @@
+#!/bin/sh
+
+if [ "$DRONE_NETRC_DEBUG" = "true" ]; then
+  export GIT_CURL_VERBOSE=1
+  export GIT_TRACE=1
+  export LFS_DEBUG_HTTP=true
+fi
+
+if [ ! -d .git ]; then
+  set -x
+  git init
+  git config --global --add safe.directory '*'
+  git remote add origin ${DRONE_REMOTE_URL}
+  set +x
+fi
+
+if [ "$DRONE_NETRC_LFS_ENABLED" = "true" ]; then
+  set -x
+  git lfs install
+  set +x
+fi
+
+if [ "$HARNESS_GIT_PROXY" = "true" ] && [ -n "$HARNESS_HTTPS_PROXY" ]; then
+  set -x
+  git config --global http.proxy "$HARNESS_HTTPS_PROXY"
+  set +x
+fi
+
+if [ "$DRONE_NETRC_FETCH_TAGS" = "true" ]; then
+  set -x
+  git fetch --tags
+  set +x
+fi
+
+IFS=$'\n'
+
+if [ -n "$DRONE_NETRC_SPARSE_CHECKOUT" ]; then
+  echo "+ git sparse-checkout init"
+  git sparse-checkout init
+  for line in $DRONE_NETRC_SPARSE_CHECKOUT; do
+    echo "+ git sparse-checkout add $line"
+    git sparse-checkout add "$line"
+  done
+fi
+
+if [ -n "$DRONE_NETRC_PRE_FETCH" ]; then
+  for line in $DRONE_NETRC_PRE_FETCH; do
+    echo "+ $line"
+    eval $line
+  done
+fi 

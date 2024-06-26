@@ -5,20 +5,6 @@ if [ ! -z "${PLUGIN_DEPTH}" ]; then
 	FLAGS="--depth=${PLUGIN_DEPTH}"
 fi
 
-if [ ! -d .git ]; then
-	set -x
-	git init
-	git config --global --add safe.directory '*'
-	git remote add origin ${DRONE_REMOTE_URL}
-	set +x
-fi
-
-if [ "$HARNESS_GIT_PROXY" = "true" ] && [ -n "$HARNESS_HTTPS_PROXY" ]; then
-  set -x
-  git config --global http.proxy "$HARNESS_HTTPS_PROXY"
-  set +x
-fi
-
 # If PR clone strategy is cloning only the source branch
 if [ "$PLUGIN_PR_CLONE_STRATEGY" = "SourceBranch" ]; then
 	set -e
