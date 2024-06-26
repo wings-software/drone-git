@@ -4,6 +4,13 @@ FLAGS=""
 if [ ! -z "${PLUGIN_DEPTH}" ]; then
 	FLAGS="--depth=${PLUGIN_DEPTH}"
 fi
+env
+
+if [ "$DRONE_NETRC_DEBUG" = "true" ]; then
+  export GIT_CURL_VERBOSE=1
+  export GIT_TRACE=1
+  export LFS_DEBUG_HTTP=true
+fi
 
 if [ ! -d .git ]; then
 	set -x
@@ -13,11 +20,49 @@ if [ ! -d .git ]; then
 	set +x
 fi
 
+if [ "$DRONE_NETRC_LFS_ENABLED" = "true" ]; then
+  set -x
+  git lfs install
+  set +x
+fi
+
 if [ "$HARNESS_GIT_PROXY" = "true" ] && [ -n "$HARNESS_HTTPS_PROXY" ]; then
   set -x
   git config --global http.proxy "$HARNESS_HTTPS_PROXY"
   set +x
 fi
+
+if [ "$DRONE_NETRC_FETCH_TAGS" = "true" ]; then
+  set -x
+  git fetch --tags
+  set +x
+fi
+
+if [ "$DRONE_NETRC_SUBMODULE_STRATEGY" = "true" ]; then
+	echo '+ git submodule update --init'
+    git submodule update --init
+elif [ "$DRONE_NETRC_SUBMODULE_STRATEGY" = "recursive" ]; then
+	echo '+ git submodule update --init --recursive'
+    git submodule update --init --recursive
+fi
+IFS='
+'
+
+if [ -n "$DRONE_NETRC_SPARSE_CHECKOUT" ]; then
+	git sparse-checkout init
+    for line in $DRONE_NETRC_SPARSE_CHECKOUT; do
+        echo "+ git sparse-checkout add $line"
+        git sparse-checkout add "$line"
+    done
+	cat .git/info/sparse-checkout
+fi
+
+if [ -n "$DRONE_NETRC_PRE_FETCH" ]; then
+    for line in $DRONE_NETRC_PRE_FETCH; do
+        echo "+ $line"
+        eval $line
+    done
+fi 
 
 # the branch may be empty for certain event types,
 # such as github deployment events. If the branch
@@ -32,6 +77,7 @@ if [ -z "${DRONE_COMMIT_BRANCH}" ]; then
 	exit 0
 fi
 
+
 # the commit sha may be empty for builds that are
 # manually triggered in Harness CI Enterprise. If
 # the commit is empty we clone the branch.
@@ -40,6 +86,7 @@ if [ -z "${DRONE_COMMIT_SHA}" ]; then
 	set -x
 	git fetch ${FLAGS} origin +refs/heads/${DRONE_COMMIT_BRANCH}:
 	git checkout -b ${DRONE_COMMIT_BRANCH} origin/${DRONE_COMMIT_BRANCH}
+	ls -la
 	exit 0
 fi
 
@@ -48,3 +95,5 @@ set -x
 
 git fetch ${FLAGS} origin +refs/heads/${DRONE_COMMIT_BRANCH}:
 git checkout ${DRONE_COMMIT_SHA} -b ${DRONE_COMMIT_BRANCH}
+
+ls -la
