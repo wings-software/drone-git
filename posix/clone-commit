@@ -5,12 +5,24 @@ if [ ! -z "${PLUGIN_DEPTH}" ]; then
 	FLAGS="--depth=${PLUGIN_DEPTH}"
 fi
 
+
+if [ "$DRONE_NETRC_DEBUG" = "true" ]; then
+  export GIT_CURL_VERBOSE=1
+  export GIT_TRACE=1
+fi
+
 if [ ! -d .git ]; then
 	set -x
 	git init
 	git config --global --add safe.directory '*'
 	git remote add origin ${DRONE_REMOTE_URL}
 	set +x
+fi
+
+if [ "$DRONE_NETRC_LFS_ENABLED" = "true" ]; then
+  set -x
+  git config lfs.url $DRONE_NETRC_LFS_URL
+  set +x
 fi
 
 if [ "$HARNESS_GIT_PROXY" = "true" ] && [ -n "$HARNESS_HTTPS_PROXY" ]; then
