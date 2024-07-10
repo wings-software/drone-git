@@ -32,20 +32,18 @@ if [ "$DRONE_NETRC_FETCH_TAGS" = "true" ]; then
   set +x
 fi
 
-IFS=$'\n'
-
 if [ -n "$DRONE_NETRC_SPARSE_CHECKOUT" ]; then
   echo "+ git sparse-checkout init"
   git sparse-checkout init
-  for line in $DRONE_NETRC_SPARSE_CHECKOUT; do
+  echo "$DRONE_NETRC_SPARSE_CHECKOUT" | while IFS= read -r line; do
     echo "+ git sparse-checkout add $line"
     git sparse-checkout add "$line"
   done
 fi
 
 if [ -n "$DRONE_NETRC_PRE_FETCH" ]; then
-  for line in $DRONE_NETRC_PRE_FETCH; do
+  echo "$DRONE_NETRC_PRE_FETCH" | while IFS= read -r line; do
     echo "+ $line"
-    eval $line
+    eval "$line"
   done
-fi 
+fi
