@@ -1,8 +1,5 @@
 # escape=`
 
-FROM mcr.microsoft.com/windows/servercore:ltsc2022 as core
-
-
 FROM mcr.microsoft.com/windows/servercore:ltsc2022 AS git
 SHELL ["powershell.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
@@ -20,6 +17,7 @@ RUN Add-WindowsCapability -Online -Name OpenSSH.Client*
 
 FROM mcr.microsoft.com/powershell:windowsservercore-ltsc2022
 COPY --from=git /git /git
+COPY --from=git /git-lfs /git-lfs
 
 COPY --from=git C:\Windows\System32\OpenSSH\ /openssh
 
@@ -27,7 +25,7 @@ ADD windows/* /bin/
 
 # https://github.com/PowerShell/PowerShell/issues/6211#issuecomment-367477137
 USER ContainerAdministrator
-RUN setx /M PATH "%PATH%;C:\Program Files\PowerShell;C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;C:\git-lfs"
+RUN setx /M PATH "%PATH%;C:\Program Files\PowerShell;C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;C:\git-lfs\git-lfs-3.5.1"
 
 SHELL ["pwsh", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 CMD [ "pwsh", "C:\\bin\\clone.ps1" ]

@@ -93,6 +93,8 @@ case $DRONE_COMMIT_REF in
   refs/merge-requests/* ) CLONE_TYPE=pull_request ;;
 esac
 
+common
+
 case $CLONE_TYPE in
 pull_request)
 	clone-pull-request
@@ -104,6 +106,8 @@ tag)
 	clone-commit
 	;;
 esac
+
+post-fetch
 
 if [ ! -z "$PLUGIN_OUTPUT_FILE_PATHS_CONTENT" ]
 then

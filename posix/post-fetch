@@ -1,0 +1,9 @@
+#!/bin/sh
+
+if [ "$DRONE_NETRC_SUBMODULE_STRATEGY" = "true" ]; then
+  echo '+ git submodule update --init'
+  git submodule update --init
+elif [ "$DRONE_NETRC_SUBMODULE_STRATEGY" = "recursive" ]; then
+  echo '+ git submodule update --init --recursive'
+  git submodule update --init --recursive
+fi
