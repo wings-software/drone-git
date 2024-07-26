@@ -2,8 +2,6 @@
 
 set -e
 
-chmod +x copy-file-content
-
 # if PLUGIN_ONLY_COPY_FILE_CONTENT is set, only copy the file content
 if [ "$PLUGIN_ONLY_COPY_FILE_CONTENT" = "true" ]; then
 	copy-file-content
