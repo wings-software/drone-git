@@ -1,0 +1,10 @@
+#!/bin/sh
+
+if [ ! -z "$PLUGIN_OUTPUT_FILE_PATHS_CONTENT" ]; then
+    for FILE_PATH in ${PLUGIN_OUTPUT_FILE_PATHS_CONTENT//,/ }; do
+      FILE_CONTENT=$(<$FILE_PATH)
+      FILE_CONTENT_BASE_64=`echo "$FILE_CONTENT" | base64`
+      FIXED_FILE_CONTENT=`echo $FILE_CONTENT_BASE_64 | tr = -`
+      echo "$FILE_PATH=$FIXED_FILE_CONTENT" >> $DRONE_OUTPUT
+    done
+fi

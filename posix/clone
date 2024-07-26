@@ -2,17 +2,12 @@
 
 set -e
 
+chmod +x copy-file-content
+
 # if PLUGIN_ONLY_COPY_FILE_CONTENT is set, only copy the file content
 if [ "$PLUGIN_ONLY_COPY_FILE_CONTENT" = "true" ]; then
-  if [ ! -z "$PLUGIN_OUTPUT_FILE_PATHS_CONTENT" ]; then
-    for FILE_PATH in ${PLUGIN_OUTPUT_FILE_PATHS_CONTENT//,/ }; do
-      FILE_CONTENT=$(<$FILE_PATH)
-      FILE_CONTENT_BASE_64=`echo "$FILE_CONTENT" | base64`
-      FIXED_FILE_CONTENT=`echo $FILE_CONTENT_BASE_64 | tr = -`
-      echo "$FILE_PATH=$FIXED_FILE_CONTENT" >> $DRONE_OUTPUT
-    done
-  fi
-  exit 0
+	copy-file-content
+	exit 0
 fi
 
 # force the home directory path.
@@ -122,17 +117,4 @@ esac
 
 post-fetch
 
-if [ ! -z "$PLUGIN_OUTPUT_FILE_PATHS_CONTENT" ]
-then
-  for FILE_PATH in ${PLUGIN_OUTPUT_FILE_PATHS_CONTENT//,/ }
-  do
-      FILE_CONTENT=$(<$FILE_PATH)
-      FILE_CONTENT_BASE_64=`echo "$FILE_CONTENT" | base64`
-      # We are using github.com/joho/godotenv to fetch a map of env variables from plugins.
-      # It considers key2 as new env variable in the next yaml file content FILE_CONTENT="key1: value, key2: value". 
-      # Hence, we need to base64 encode file content and replace == with -- in encoded string, because the above lib doesn't allow ==
-      # while fetching a map of env variables from plugins.
-      FIXED_FILE_CONTENT=`echo $FILE_CONTENT_BASE_64 | tr = -`
-      echo "$FILE_PATH=$FIXED_FILE_CONTENT" >> $DRONE_OUTPUT
-  done
-fi
+copy-file-content

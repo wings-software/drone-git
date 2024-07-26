@@ -5,7 +5,7 @@ RUN pip-3 install awscli
 RUN curl -L https://github.com/git-lfs/git-lfs/releases/download/v3.5.1/git-lfs-linux-amd64-v3.5.1.tar.gz > git-lfs.tar.gz \
     && tar -xvzf git-lfs.tar.gz && mv git-lfs-3.5.1/git-lfs /usr/local/bin/git-lfs
 
-ADD posix/clone posix/clone-commit posix/clone-pull-request posix/clone-tag posix/fixtures.sh posix/common posix/post-fetch /usr/local/bin/
+ADD posix/clone posix/clone-commit posix/clone-pull-request posix/clone-tag posix/fixtures.sh posix/common posix/post-fetch posix/copy-file-content /usr/local/bin/
 RUN chmod -R 777 /etc/ssh
 
 RUN microdnf install findutils
