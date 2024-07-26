@@ -2,8 +2,8 @@
 
 set -e
 
-# if PLUGIN_COPY_FILE_CONTENT is set, only copy the file content
-if [ "$PLUGIN_COPY_FILE_CONTENT" = "true" ]; then
+# if PLUGIN_ONLY_COPY_FILE_CONTENT is set, only copy the file content
+if [ "$PLUGIN_ONLY_COPY_FILE_CONTENT" = "true" ]; then
   if [ ! -z "$PLUGIN_OUTPUT_FILE_PATHS_CONTENT" ]; then
     for FILE_PATH in ${PLUGIN_OUTPUT_FILE_PATHS_CONTENT//,/ }; do
       FILE_CONTENT=$(<$FILE_PATH)
