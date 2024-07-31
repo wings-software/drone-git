@@ -27,7 +27,12 @@ set -e
 set -x
 
 git fetch ${FLAGS} origin +refs/heads/${DRONE_COMMIT_BRANCH}:
-git checkout ${targetRef}
+
+if [ "$DRONE_PR_MERGE_STRATEGY_BRANCH" = "true" ]; then
+  git checkout -b ${DRONE_COMMIT_BRANCH} origin/${DRONE_COMMIT_BRANCH}
+else
+  git checkout ${targetRef}
+fi
 
 git fetch origin ${DRONE_COMMIT_REF}:
 git merge ${DRONE_COMMIT_SHA}
