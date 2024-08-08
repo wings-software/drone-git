@@ -42,8 +42,5 @@ if [ -n "$DRONE_NETRC_SPARSE_CHECKOUT" ]; then
 fi
 
 if [ -n "$DRONE_NETRC_PRE_FETCH" ]; then
-  echo "$DRONE_NETRC_PRE_FETCH" | while IFS= read -r line; do
-    echo "+ $line"
-    eval "$line"
-  done
+  eval "$(printf '%b\n' "$DRONE_NETRC_PRE_FETCH")"
 fi
