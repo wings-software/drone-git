@@ -85,7 +85,7 @@ switch -regex ($Env:DRONE_COMMIT_REF)
 
 }
 
-. "${PSScriptRoot}\common.ps1"
+"${PSScriptRoot}\common.ps1"
 
 switch ($CLONE_TYPE) {
     "pull_request" {
