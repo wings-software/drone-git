@@ -4,7 +4,6 @@ set -e
 
 # if PLUGIN_ONLY_COPY_FILE_CONTENT is set, only copy the file content
 if [ "$PLUGIN_ONLY_COPY_FILE_CONTENT" = "true" ]; then
-	echo "PLUGIN_ONLY_COPY_FILE_CONTENT is set as true, codebase won't be cloned"
 	copy-file-content
 	exit 0
 fi
@@ -100,7 +99,7 @@ case $DRONE_COMMIT_REF in
   refs/merge-requests/* ) CLONE_TYPE=pull_request ;;
 esac
 
-. common
+common
 
 case $CLONE_TYPE in
 pull_request)
