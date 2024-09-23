@@ -1,6 +1,6 @@
 FROM redhat/ubi8-minimal:8.9-1161
-RUN microdnf update --nodocs --setopt=install_weak_deps=0 && microdnf install ca-certificates git tar openssh curl perl python3.11 shadow-utils
-RUN pip3 install awscli
+RUN microdnf update --nodocs --setopt=install_weak_deps=0 && microdnf install ca-certificates git tar openssh curl perl python3.11 python3.11-distutils  && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 shadow-utils
+RUN pip-3 install awscli
 
 RUN curl -L https://github.com/git-lfs/git-lfs/releases/download/v3.5.1/git-lfs-linux-amd64-v3.5.1.tar.gz > git-lfs.tar.gz \
     && tar -xvzf git-lfs.tar.gz && mv git-lfs-3.5.1/git-lfs /usr/local/bin/git-lfs
