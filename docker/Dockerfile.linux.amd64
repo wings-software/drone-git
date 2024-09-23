@@ -1,4 +1,5 @@
 FROM us.gcr.io/platform-205701/harness/ubi8:8.8
+USER root
 RUN microdnf update && microdnf install ca-certificates git tar openssh curl perl python38 shadow-utils
 RUN pip-3 install awscli
 
