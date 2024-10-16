@@ -1,4 +1,4 @@
-FROM us.gcr.io/platform-205701/harness/ubi8:8.8
+FROM redhat/ubi8-minimal:8.8
 USER root
 RUN microdnf update --nodocs --setopt=install_weak_deps=0 && microdnf install --nodocs ca-certificates git tar openssh curl perl python3.11 python3-pip shadow-utils
 RUN pip3 install awscli
