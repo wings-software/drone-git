@@ -31,7 +31,7 @@ if ($Env:DRONE_SSH_KEY) {
     # }
     # ssh-keyscan -H $Env:SSH_KEYSCAN_FLAGS $Env:DRONE_NETRC_MACHINE >  C:\\.ssh\\known_hosts
 
-    $Env:GIT_SSH_COMMAND="ssh -i C:\\.ssh\\id_rsa ${Env:SSH_KEYSCAN_FLAGS} -o StrictHostKeyChecking=no"
+    $Env:GIT_SSH_COMMAND="ssh -i C:/.ssh/id_rsa ${Env:SSH_KEYSCAN_FLAGS} -o StrictHostKeyChecking=no"
 }
 
 # configure git global behavior and parameters via the
