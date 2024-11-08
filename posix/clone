@@ -37,26 +37,48 @@ fi
 # known hosts file.
 
 if [ ! -z "${DRONE_SSH_KEY}" ]; then
+	echo "DEBUG: Setting up SSH key and configuration"
+
 	mkdir -p ${HOME}/.ssh
 	echo "$DRONE_SSH_KEY" > ${HOME}/.ssh/id_rsa
 	chmod 600 ${HOME}/.ssh/id_rsa
+	echo "DEBUG: SSH key file created and permissions set"
 
 	touch ${HOME}/.ssh/known_hosts
 	chmod 600 ${HOME}/.ssh/known_hosts
+	echo "DEBUG: Known hosts file initialized and permissions set"
 
 	SSH_PORT_FLAG=""
 	if [ ! -z "${DRONE_NETRC_PORT}" ]; then
 		SSH_PORT_FLAG="-p ${DRONE_NETRC_PORT}"
+		echo "DEBUG: SSH port flag set to ${SSH_PORT_FLAG}"
 	fi
 
 	SSH_KEYSCAN_TIMEOUT_FLAG=""
 	if [ ! -z "${PLUGIN_SSH_KEYSCAN_TIMEOUT}" ]; then
 		SSH_KEYSCAN_TIMEOUT_FLAG="-T ${PLUGIN_SSH_KEYSCAN_TIMEOUT}"
+		echo "DEBUG: SSH keyscan timeout flag set to ${SSH_KEYSCAN_TIMEOUT_FLAG}"
 	fi
 
+	echo "DEBUG: Scanning SSH keys for ${DRONE_NETRC_MACHINE}"
 	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2> /dev/null
-	export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
+	echo "DEBUG: SSH keyscan complete"
+
+	# Check if DRONE_SSH_PASSPHRASE is set, then start ssh-agent and add key with passphrase
+	if [ ! -z "${DRONE_SSH_PASSPHRASE}" ]; then
+		echo "DEBUG: DRONE_SSH_PASSPHRASE detected, starting ssh-agent"
+		eval $(ssh-agent -s)
+		echo "${DRONE_SSH_PASSPHRASE}" | ssh-add ${HOME}/.ssh/id_rsa
+		echo "DEBUG: SSH key added to ssh-agent with passphrase"
+	else
+		echo "DEBUG: No passphrase detected, skipping ssh-agent setup"
+	fi
+
+	# Set GIT_SSH_COMMAND to use ssh-agent or direct SSH key without passphrase
+	export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -F /dev/null ${SSH_PORT_FLAG}"
+	echo "DEBUG: GIT_SSH_COMMAND set for SSH operations"
 fi
+
 
 # AWS codecommit support using AWS access key & secret key
 # Refer: https://docs.aws.amazon.com/codecommit/latest/userguide/setting-up-https-unixes.html

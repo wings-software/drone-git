@@ -21,17 +21,23 @@ password $Env:DRONE_NETRC_PASSWORD
 "@ > (Join-Path $Env:USERPROFILE '_netrc');
 }
 
+# Set up SSH key and ssh-agent if DRONE_SSH_KEY is provided
 if ($Env:DRONE_SSH_KEY) {
-    mkdir C:\.ssh  -Force
-    echo $Env:DRONE_SSH_KEY > C:\.ssh\id_rsa
+    mkdir C:\.ssh -Force
+    $Env:DRONE_SSH_KEY | Out-File -Encoding ASCII -FilePath C:\.ssh\id_rsa
+    icacls C:\.ssh\id_rsa /inheritance:r /grant:r "$($Env:USERNAME):(F)"
 
-    # $Env:SSH_KEYSCAN_FLAGS=""
-    # if ($Env:DRONE_NETRC_PORT) {
-    # 	$Env:SSH_KEYSCAN_FLAGS="-p ${Env:DRONE_NETRC_PORT}"
-    # }
-    # ssh-keyscan -H $Env:SSH_KEYSCAN_FLAGS $Env:DRONE_NETRC_MACHINE >  C:\\.ssh\\known_hosts
+    # Start ssh-agent and add key with passphrase if DRONE_SSH_PASSPHRASE is set
+    Start-Service ssh-agent
+    $Env:GIT_SSH_COMMAND = "ssh -i C:\.ssh\id_rsa -o StrictHostKeyChecking=no"
 
-    $Env:GIT_SSH_COMMAND="ssh -i C:/.ssh/id_rsa ${Env:SSH_KEYSCAN_FLAGS} -o StrictHostKeyChecking=no"
+    if ($Env:DRONE_SSH_PASSPHRASE) {
+        Write-Host "DEBUG: Passphrase detected, adding SSH key to ssh-agent with passphrase"
+        echo $Env:DRONE_SSH_PASSPHRASE | ssh-add C:\.ssh\id_rsa
+    } else {
+        Write-Host "DEBUG: No passphrase detected, adding SSH key to ssh-agent without passphrase"
+        ssh-add C:\.ssh\id_rsa
+    }
 }
 
 # configure git global behavior and parameters via the
