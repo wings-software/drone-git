@@ -3,6 +3,14 @@ USER root
 RUN microdnf update --nodocs --setopt=install_weak_deps=0 && microdnf install --nodocs ca-certificates git tar openssh curl perl python3.11 python3-pip shadow-utils
 RUN pip-3 install awscli
 
+# Remove the specific file
+RUN rm -f /usr/local/lib/python3.8/site-packages/botocore/data/iam/2010-05-08/examples-1.json
+RUN rm -f /usr/local/lib/python3.8/site-packages/botocore/data/sts/2011-06-15/examples-1.json
+RUN rm -f /usr/local/lib/python3.8/site-packages/botocore/data/iam/2010-05-08/examples-1.json
+
+
+
+
 RUN curl -L https://github.com/git-lfs/git-lfs/releases/download/v3.5.1/git-lfs-linux-amd64-v3.5.1.tar.gz > git-lfs.tar.gz \
     && tar -xvzf git-lfs.tar.gz && mv git-lfs-3.5.1/git-lfs /usr/local/bin/git-lfs
 
