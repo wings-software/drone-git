@@ -10,6 +10,10 @@ RUN curl -L https://github.com/git-lfs/git-lfs/releases/download/v3.5.1/git-lfs-
 RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
           /usr/share/doc/perl-Net-SSLeay/examples/server_key.pem \
           /usr/local/lib/python3.8/site-packages/awscli/examples \
+          /usr/local/lib/python3.6/site-packages/botocore/data/sts/2011-06-15/examples-1.json \
+          /usr/local/lib/python3.6/site-packages/botocore/data/iam/2010-05-08/examples-1.json \
+          /usr/local/lib/python3.8/site-packages/botocore/data/iam/2010-05-08/examples-1.json \
+          /usr/local/lib/python3.8/site-packages/botocore/data/sts/2011-06-15/examples-1.json \
           /usr/local/lib/python3.8/site-packages/awscli/topics
 
 
