@@ -7,9 +7,9 @@ RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tl
     Invoke-WebRequest -UseBasicParsing https://github.com/git-for-windows/git/releases/download/v2.39.2.windows.1/MinGit-2.39.2-64-bit.zip -OutFile git.zip; `
     Expand-Archive git.zip -DestinationPath C:\git;
 
-# Download and extract Git LFS
+# Download and extract Git LFS (Updated to v3.6.0)
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
-    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.5.1/git-lfs-windows-amd64-v3.5.1.zip -OutFile git-lfs.zip; `
+    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.6.0/git-lfs-windows-amd64-v3.6.0.zip -OutFile git-lfs.zip; `
     Expand-Archive git-lfs.zip -DestinationPath C:\git-lfs;
 
 FROM mcr.microsoft.com/powershell:nanoserver-1903
@@ -20,7 +20,8 @@ ADD windows/* /bin/
 
 # https://github.com/PowerShell/PowerShell/issues/6211#issuecomment-367477137
 USER ContainerAdministrator
-RUN setx /M PATH "%PATH%;C:\Program Files\PowerShell;C:\git-lfs\git-lfs-3.5.1"
+RUN setx /M PATH "%PATH%;C:\Program Files\PowerShell;C:\git-lfs\git-lfs-3.6.0"
+
 
 SHELL ["pwsh", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 CMD [ "pwsh", "C:\\bin\\clone.ps1" ]
