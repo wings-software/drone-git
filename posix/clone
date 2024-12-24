@@ -41,6 +41,15 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 	echo "$DRONE_SSH_KEY" > ${HOME}/.ssh/id_rsa
 	chmod 600 ${HOME}/.ssh/id_rsa
 
+  # If passphrase is provided, add SSH key to the agent
+  if [ ! -z "${DRONE_SSH_PASSPHRASE}" ]; then
+      # Start SSH agent if not already running
+      eval $(ssh-agent -s)
+
+      # Add the SSH key to the agent using the passphrase
+      echo "$DRONE_SSH_PASSPHRASE" | ssh-add ${HOME}/.ssh/id_rsa
+  fi
+
 	touch ${HOME}/.ssh/known_hosts
 	chmod 600 ${HOME}/.ssh/known_hosts
 

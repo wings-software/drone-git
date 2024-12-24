@@ -30,13 +30,27 @@ if ($Env:DRONE_SSH_KEY) {
     # 	$Env:SSH_KEYSCAN_FLAGS="-p ${Env:DRONE_NETRC_PORT}"
     # }
     # ssh-keyscan -H $Env:SSH_KEYSCAN_FLAGS $Env:DRONE_NETRC_MACHINE >  C:\\.ssh\\known_hosts
+    # Handle SSH passphrase if provided
+    if ($Env:DRONE_SSH_PASSPHRASE) {
+        # Start the SSH agent if not already running
+        $sshAgentOutput = ssh-agent
+        Invoke-Expression $sshAgentOutput
 
-    $Env:GIT_SSH_COMMAND="ssh -i C:/.ssh/id_rsa ${Env:SSH_KEYSCAN_FLAGS} -o StrictHostKeyChecking=no"
-}
+        # Add the SSH key to the agent using the passphrase
+        $passphraseScript = @"
+$Env:DRONE_SSH_PASSPHRASE | ssh-add C:\.ssh\id_rsa
+"@
+        Invoke-Expression $passphraseScript
+    }
 
 # configure git global behavior and parameters via the
 # following environment variables:
 
+    # Set the GIT_SSH_COMMAND with the private key and strict host key checking disabled
+    $Env:GIT_SSH_COMMAND = "ssh -i C:\.ssh\id_rsa -o StrictHostKeyChecking=no"
+}
+
+# configure git global behavior and parameters via the following environment variables.
 if ($Env:PLUGIN_SKIP_VERIFY) {
     $Env:GIT_SSL_NO_VERIFY = "true"
 }
@@ -57,12 +71,8 @@ $Env:GIT_COMMITTER_NAME  = $Env:GIT_AUTHOR_NAME
 $Env:GIT_COMMITTER_EMAIL = $Env:GIT_AUTHOR_EMAIL
 
 # invoke the sub-script based on the drone event type.
-# TODO we should ultimately look at the ref, since
-# we need something compatible with deployment events.
-
 Set-Variable -Name "CLONE_TYPE" -Value "$Env:DRONE_BUILD_EVENT"
-switch -regex ($Env:DRONE_COMMIT_REF)
-{
+switch -regex ($Env:DRONE_COMMIT_REF) {
     'refs/tags/*' {
         Set-Variable -Name "CLONE_TYPE" -Value "tag"
         break
@@ -82,7 +92,6 @@ switch -regex ($Env:DRONE_COMMIT_REF)
         Set-Variable -Name "CLONE_TYPE" -Value "pull_request"
         break
     }
-
 }
 
 Invoke-Expression "${PSScriptRoot}\common.ps1"
