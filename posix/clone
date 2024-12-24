@@ -47,7 +47,7 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
       eval $(ssh-agent -s)
 
       # Add the SSH key to the agent using the passphrase
-      echo "$DRONE_SSH_PASSPHRASE" | ssh-add ${HOME}/.ssh/id_rsa
+      echo "$DRONE_SSH_PASSPHRASE" | ssh-add /home/drone/.ssh/id_rsa
   fi
 
 	touch ${HOME}/.ssh/known_hosts
