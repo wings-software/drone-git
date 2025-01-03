@@ -55,8 +55,7 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 	fi
 
   if [ ! -z "${DRONE_SSH_PASSPHRASE}" ]; then
-      # Start SSH agent if not already running
-      ssh-keygen -p -f ${HOME}/.ssh/id_rsa -P ${DRONE_SSH_PASSPHRASE} -N ""
+    ssh-keygen -p -f ${HOME}/.ssh/id_rsa -P ${DRONE_SSH_PASSPHRASE} -N ""
   fi
 
 	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2> /dev/null
