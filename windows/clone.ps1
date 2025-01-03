@@ -31,6 +31,11 @@ if ($Env:DRONE_SSH_KEY) {
     # }
     # ssh-keyscan -H $Env:SSH_KEYSCAN_FLAGS $Env:DRONE_NETRC_MACHINE >  C:\\.ssh\\known_hosts
 
+    # Add passphrase support for the SSH key
+    if ($Env:DRONE_SSH_PASSPHRASE) {
+        ssh-keygen -p -f C:\.ssh\id_rsa -P $Env:DRONE_SSH_PASSPHRASE -N ""
+    }
+
     $Env:GIT_SSH_COMMAND="ssh -i C:/.ssh/id_rsa ${Env:SSH_KEYSCAN_FLAGS} -o StrictHostKeyChecking=no"
 }
 
