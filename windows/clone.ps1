@@ -22,33 +22,15 @@ password $Env:DRONE_NETRC_PASSWORD
 }
 
 if ($Env:DRONE_SSH_KEY) {
-    # Print the SSH private key before saving it
-    Write-Output "SSH private key before saving:"
-    Write-Output $Env:DRONE_SSH_KEY
-
-    mkdir C:\.ssh -Force
+    mkdir C:\.ssh  -Force
     echo $Env:DRONE_SSH_KEY > C:\.ssh\id_rsa
-
-    # Print the SSH private key after saving it
-    Write-Output "SSH private key saved to C:\.ssh\id_rsa:"
-    Write-Output (Get-Content C:\.ssh\id_rsa)
 
     # $Env:SSH_KEYSCAN_FLAGS=""
     # if ($Env:DRONE_NETRC_PORT) {
-    #     $Env:SSH_KEYSCAN_FLAGS="-p ${Env:DRONE_NETRC_PORT}"
+    # 	$Env:SSH_KEYSCAN_FLAGS="-p ${Env:DRONE_NETRC_PORT}"
     # }
     # ssh-keyscan -H $Env:SSH_KEYSCAN_FLAGS $Env:DRONE_NETRC_MACHINE >  C:\\.ssh\\known_hosts
 
-    # Add passphrase support for the SSH key
-    if ($Env:DRONE_SSH_PASSPHRASE) {
-        ssh-keygen -p -f C:/.ssh/id_rsa -P $Env:DRONE_SSH_PASSPHRASE -N ""
-    }
-
-    # Print the SSH key after passphrase modification (if applied)
-    Write-Output "SSH private key after passphrase modification (if applicable):"
-    Write-Output (Get-Content C:\.ssh\id_rsa)
-
-    # Set the Git SSH command environment variable
     $Env:GIT_SSH_COMMAND="ssh -i C:/.ssh/id_rsa ${Env:SSH_KEYSCAN_FLAGS} -o StrictHostKeyChecking=no"
 }
 
