@@ -37,29 +37,30 @@ fi
 # known hosts file.
 
 if [ ! -z "${DRONE_SSH_KEY}" ]; then
-	mkdir -p ${HOME}/.ssh
-	echo "$DRONE_SSH_KEY" > ${HOME}/.ssh/id_rsa
-	chmod 600 ${HOME}/.ssh/id_rsa
+    mkdir -p "${HOME}/.ssh"
+    echo "$DRONE_SSH_KEY" > "${HOME}/.ssh/id_rsa"
+    chmod 600 "${HOME}/.ssh/id_rsa"
 
-	touch ${HOME}/.ssh/known_hosts
-	chmod 600 ${HOME}/.ssh/known_hosts
+    touch "${HOME}/.ssh/known_hosts"
+    chmod 600 "${HOME}/.ssh/known_hosts"
 
-	SSH_PORT_FLAG=""
-	if [ ! -z "${DRONE_NETRC_PORT}" ]; then
-		SSH_PORT_FLAG="-p ${DRONE_NETRC_PORT}"
-	fi
+    SSH_PORT_FLAG=""
+    if [ ! -z "${DRONE_NETRC_PORT}" ]; then
+        SSH_PORT_FLAG="-p ${DRONE_NETRC_PORT}"
+    fi
 
-	SSH_KEYSCAN_TIMEOUT_FLAG=""
-	if [ ! -z "${PLUGIN_SSH_KEYSCAN_TIMEOUT}" ]; then
-		SSH_KEYSCAN_TIMEOUT_FLAG="-T ${PLUGIN_SSH_KEYSCAN_TIMEOUT}"
-	fi
+    SSH_KEYSCAN_TIMEOUT_FLAG=""
+    if [ ! -z "${PLUGIN_SSH_KEYSCAN_TIMEOUT}" ]; then
+        SSH_KEYSCAN_TIMEOUT_FLAG="-T ${PLUGIN_SSH_KEYSCAN_TIMEOUT}"
+    fi
 
-  if [ ! -z "${DRONE_SSH_PASSPHRASE}" ]; then
-    ssh-keygen -p -f ${HOME}/.ssh/id_rsa -P ${DRONE_SSH_PASSPHRASE} -N ""
-  fi
+    # If DRONE_SSH_PASSPHRASE is set, update the ssh key passphrase
+    if [ ! -z "${DRONE_SSH_PASSPHRASE}" ]; then
+        ssh-keygen -p -f "${HOME}/.ssh/id_rsa" -P "${DRONE_SSH_PASSPHRASE}" -N ""
+    fi
 
-	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2> /dev/null
-	export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
+    ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} "${DRONE_NETRC_MACHINE}" > "${HOME}/.ssh/known_hosts" 2> /dev/null
+    export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
 fi
 
 # AWS codecommit support using AWS access key & secret key
