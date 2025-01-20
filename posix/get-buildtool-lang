@@ -1,0 +1,76 @@
+#!/bin/sh
+
+set -e
+
+# Define a list of language extensions
+detect_language() {
+    found_lang=""
+
+    # Define extensions for languages
+    case "$1" in
+        *.java) found_lang="Java" ;;
+        *.py) found_lang="Python" ;;
+        *.rb) found_lang="Ruby" ;;
+        *.go) found_lang="Golang" ;;
+        *.scala) found_lang="Scala" ;;
+        *.kt|*.kts) found_lang="Kotlin" ;;
+        *) found_lang="" ;;
+    esac
+    echo "$found_lang"
+}
+
+# Traverse the directory and detect languages
+found=""
+repo_path="./"
+for file in $(find "$repo_path" -type f 2>/dev/null | sort); do
+    lang=$(detect_language "$file")
+    if [ -n "$lang" ]; then
+        found="$lang"
+        break
+    fi
+done
+
+if [ -n "$found" ]; then
+    export HARNESS_LANG=$found
+fi
+
+
+#!/bin/bash
+
+# Define the list of build tools and their corresponding file patterns
+detect_build_tool() {
+    repo_path="$1"
+    build_tool=""
+
+    if [ -f "$repo_path/pom.xml" ]; then
+        build_tool="Maven"
+    elif [ -f "$repo_path/build.gradle" ]; then
+        build_tool="Gradle"
+    elif [ -f "$repo_path/package.json" ]; then
+        build_tool="Node"
+    elif [ -f "$repo_path/yarn.lock" ]; then
+        build_tool="Yarn"
+    elif [ -f "$repo_path/go.mod" ]; then
+        build_tool="Go"
+    elif [ -f "$repo_path/WORKSPACE" ]; then
+        build_tool="Bazel"
+    elif [ -f "$repo_path/*.csproj" ]; then
+        build_tool="Dotnet"
+    fi
+
+    echo "$build_tool"
+}
+
+
+HARNESS_BUILD_TOOL=$(detect_build_tool "$repo_path")
+
+# Create a JSON structure
+json_content=$(cat <<EOF
+{
+  "harness_lang": "$HARNESS_LANG",
+  "harness_build_tool": "$HARNESS_BUILD_TOOL"
+}
+EOF
+)
+
+  echo "$json_content" > "$PLUGIN_BUILD_TOOL_FILE"

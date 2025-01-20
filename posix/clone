@@ -116,3 +116,7 @@ esac
 post-fetch
 
 copy-file-content
+
+if [ -n "$PLUGIN_BUILD_TOOL_FILE" ]; then
+	get-buildtool-lang || true
+fi
