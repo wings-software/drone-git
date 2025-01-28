@@ -9,7 +9,7 @@ detect_languages() {
     detected_langs=""
 
     # Get all file extensions in the repository
-    files=$(find "$repo_path" -type f -not -path '*/\.*' 2>/dev/null | sed -E 's/.*\.(.*)$/\1/' | sort | uniq)
+    files=$(find "$repo_path" -type f -maxdepth 7 -not -path '*/\.*' 2>/dev/null | sed -E 's/.*\.(.*)$/\1/' | sort | uniq)
 
     # Process the langs variable without subshells
     lang_exts=$(echo "$langs" | tr ',' '\n')
