@@ -1,0 +1,79 @@
+#!/bin/sh
+
+# Define language and their corresponding extensions using comma as delimiter
+langs="Java:java,Python:py,JavaScript:js,TypeScript:ts,C:c,C++:cpp,C++:cxx,C++:cc,CSharp:c#,CSharp:cs,PHP:php,Golang:go,Rust:rs,Kotlin:kt,Kotlin:kts,Lua:lua,Dart:dart,Ruby:rb,Swift:swift,R:r,VBScript:vb,Groovy:groovy,Scala:scala,Perl:pl,Godot:gd,Objective-C:m,Elixir:exs,Haskell:hs,Pascal:pas,Lisp:lisp,Lisp:cl,Lisp:clj,Lisp:cljs,Julia:jl,Zig:zig,Fortran:f,Solidity:sol,Ada:adb,Erlang:erl,Erlang:hrl,F#:fs,Apex:cls,Prolog:pro,OCaml:ml,COBOL:cbl,COBOL:cob,Crystal:cr,Nim:nim,Assembly:asm,VBA:vba,Shell:sh,Shell:bash,PowerShell:ps1,SQL:sql,HTML:html,HTML:htm,CSS:css"
+
+# Function to detect languages based on file extensions in the given directory and its subdirectories
+detect_languages() {
+    repo_path="$1"
+    detected_langs=""
+
+    # Get all file extensions in the repository
+    files=$(find "$repo_path" -type f -maxdepth 7 -not -path '*/\.*' 2>/dev/null | sed -E 's/.*\.(.*)$/\1/' | sort | uniq)
+
+    # Process the langs variable without subshells
+    lang_exts=$(echo "$langs" | tr ',' '\n')
+    for lang_ext in $lang_exts; do
+        # Split the language and extension by the colon ':'
+        lang=$(echo "$lang_ext" | cut -d: -f1)
+        ext=$(echo "$lang_ext" | cut -d: -f2)
+
+        # Check if the extension is in the list of file extensions found in the repo
+        if echo "$files" | grep -qw "$ext"; then
+            # Add the language to the detected languages list
+            if [ -z "$detected_langs" ]; then
+                detected_langs="$lang"
+            else
+                detected_langs="$detected_langs,$lang"
+            fi
+        fi
+    done
+
+    # Output the detected languages
+    echo "$detected_langs"
+}
+
+# Function to detect build tools
+detect_build_tool() {
+    repo_path="$1"
+    build_tool=""
+
+    # Check for common build tool files
+    if [ -f "$repo_path/pom.xml" ]; then
+        build_tool="Maven"
+    elif [ -f "$repo_path/build.gradle" ]; then
+        build_tool="Gradle"
+    elif [ -f "$repo_path/package.json" ]; then
+        build_tool="Node"
+    elif [ -f "$repo_path/yarn.lock" ]; then
+        build_tool="Yarn"
+    elif [ -f "$repo_path/go.mod" ]; then
+        build_tool="Go"
+    elif [ -f "$repo_path/WORKSPACE" ]; then
+        build_tool="Bazel"
+    elif [ -f "$repo_path"/*.csproj ]; then
+        build_tool="Dotnet"
+    fi
+
+    # Return the detected build tool
+    echo "$build_tool"
+}
+
+# Define the repo path (default to current directory if not provided)
+repo_path="${1:-./}"
+
+# Detect languages and build tools
+HARNESS_LANG=$(detect_languages "$repo_path")
+HARNESS_BUILD_TOOL=$(detect_build_tool "$repo_path")
+
+# Create a JSON structure
+json_content=$(cat <<EOF
+{
+  "harness_lang": "$HARNESS_LANG",
+  "harness_build_tool": "$HARNESS_BUILD_TOOL"
+}
+EOF
+)
+
+# Output the JSON content to the specified file
+echo "$json_content" > "$PLUGIN_BUILD_TOOL_FILE"

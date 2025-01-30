@@ -120,3 +120,7 @@ esac
 post-fetch
 
 copy-file-content
+
+if [ -n "$PLUGIN_BUILD_TOOL_FILE" ] && [ -z "$CI_DISABLE_TELEMETRY" ]; then
+    get-buildtool-lang || true
+fi
