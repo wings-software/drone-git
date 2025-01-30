@@ -117,6 +117,6 @@ post-fetch
 
 copy-file-content
 
-if [ -n "$PLUGIN_BUILD_TOOL_FILE" ]; then
-	get-buildtool-lang || true
+if [ -n "$PLUGIN_BUILD_TOOL_FILE" ] && [ -z "$CI_DISABLE_TELEMETRY" ]; then
+    get-buildtool-lang || true
 fi
