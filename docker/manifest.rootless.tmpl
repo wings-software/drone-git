@@ -17,13 +17,13 @@ manifests:
       architecture: arm64
       os: linux
   -
-    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-1809-amd64
+    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-1809-amd64-rootless
     platform:
       architecture: amd64
       os: windows
       version: 1809
   -
-    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-ltsc2022-amd64
+    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-ltsc2022-amd64-rootless
     platform:
       architecture: amd64
       os: windows
