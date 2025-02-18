@@ -21,6 +21,36 @@ if [ ! -z "${DRONE_WORKSPACE}" ]; then
 	cd ${DRONE_WORKSPACE}
 fi
 
+# if auth type is Github app, generate auth token
+if [ "$DRONE_AUTH_TYPE" = "GithubApp" ]; then
+  if [ -z "$DRONE_GITHUB_APP_JWT_TOKEN" ] || [ -z "$DRONE_GITHUB_APP_INSTALLATION_ID" ]; then
+		echo "DRONE_GITHUB_APP_ID, DRONE_GITHUB_INSTALLATION_ID and DRONE_GITHUB_APP_PRIVATE_KEY must be set"
+		exit 1
+  fi
+	# URL
+	url="https://api.github.com/app/installations/$DRONE_GITHUB_APP_INSTALLATION_ID/access_tokens"
+
+	# Make the POST request
+	response=$(curl -s -X POST \
+		-H "Authorization: Bearer $DRONE_GITHUB_APP_JWT_TOKEN" \
+		-H "Accept: application/vnd.github+json" \
+		"$url")
+
+	# Check for errors
+	if [ $? -ne 0 ]; then
+		echo "Error making request: ${response}"
+		exit 1
+	fi
+
+	# Extract the token from the response
+	DRONE_NETRC_PASSWORD=$(echo "$response" | jq -r .token)
+
+	# Check if the token was extracted successfully
+	if [ -z "$DRONE_NETRC_PASSWORD" ]; then
+		echo "Error extracting token"
+		exit 1
+	fi
+fi
 # if the netrc enviornment variables exist, write
 # the netrc file.
 
