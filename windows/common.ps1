@@ -13,12 +13,18 @@ if ($Env:DRONE_NETRC_DEBUG) {
 if (!(Test-Path .git)) {
     Write-Host '+ git init';
     iu git init
-    
+
     Write-Host "+ git config --global --add safe.directory *"
     iu git config --global --add safe.directory '*'
-    
+
     Write-Host "+ git remote add origin $Env:DRONE_REMOTE_URL"
     iu git remote add origin $Env:DRONE_REMOTE_URL
+} else {
+    Write-Host "+ git config --global --add safe.directory *"
+    iu git config --global --add safe.directory '*'
+
+    Write-Host "+ git remote set-url origin $Env:DRONE_REMOTE_URL"
+    iu git remote set-url origin $Env:DRONE_REMOTE_URL
 }
 
 if ($env:DRONE_NETRC_LFS_ENABLED -eq "true") {

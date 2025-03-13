@@ -8,9 +8,15 @@ fi
 
 if [ ! -d .git ]; then
   set -x
+  # /tmp/harness/stageId
   git init
   git config --global --add safe.directory '*'
   git remote add origin ${DRONE_REMOTE_URL}
+  set +x
+else
+  set -x
+  git config --global --add safe.directory '*'
+  git remote set-url origin ${DRONE_REMOTE_URL}
   set +x
 fi
 
@@ -47,3 +53,4 @@ if [ -n "$DRONE_NETRC_PRE_FETCH" ]; then
     eval "$line"
   done
 fi
+
