@@ -1,5 +1,18 @@
 #!/bin/sh
 
+# Function to update the origin URL for git remote
+update_origin_url() {
+  local origin_url=$1
+  # Check if the 'origin' remote exists
+  if git remote get-url origin &>/dev/null; then
+    # If 'origin' exists, update its URL
+    git remote set-url origin "${origin_url}"
+  else
+    # If 'origin' doesn't exist, add it
+    git remote add origin "${origin_url}"
+  fi
+}
+
 if [ "$DRONE_NETRC_DEBUG" = "true" ]; then
   export GIT_CURL_VERBOSE=1
   export GIT_TRACE=1
@@ -14,8 +27,8 @@ if [ ! -d .git ]; then
   set +x
 else
   set -x
-  git config --global --add safe.directory '*'
-  git remote set-url origin ${DRONE_REMOTE_URL}
+  git config --local --add safe.directory '*'
+  update_origin_url ${DRONE_REMOTE_URL}
   set +x
 fi
 

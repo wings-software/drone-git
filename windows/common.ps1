@@ -20,12 +20,10 @@ if (!(Test-Path .git)) {
     Write-Host "+ git remote add origin $Env:DRONE_REMOTE_URL"
     iu git remote add origin $Env:DRONE_REMOTE_URL
 } else {
-    Write-Host "+ git config --global --add safe.directory *"
-    iu git config --global --add safe.directory '*'
+    Write-Host "+ git config --local --add safe.directory *"
+    iu git config --local --add safe.directory '*'
 
-    Write-Host "+ git remote set-url origin $Env:DRONE_REMOTE_URL"
-    iu git remote set-url origin $Env:DRONE_REMOTE_URL
-}
+    Set-OriginUrl -originUrl $Env:DRONE_REMOTE_URL
 
 if ($env:DRONE_NETRC_LFS_ENABLED -eq "true") {
     Write-Host "+ git lfs install"
@@ -58,5 +56,23 @@ if (-not [string]::IsNullOrEmpty($env:DRONE_NETRC_PRE_FETCH)) {
     foreach ($line in $lines) {
         Write-Host "+ $line"
         Invoke-Expression $line
+    }
+}
+
+function Set-OriginUrl {
+    param (
+        [string]$originUrl
+    )
+    # Check if the remote 'origin' exists
+    $originExists = git remote get-url origin -ErrorAction SilentlyContinue
+
+    if ($originExists) {
+        # If 'origin' exists, update its URL
+        Write-Host "+ git remote set-url origin $originUrl"
+        iu git remote set-url origin $originUrl
+    } else {
+        # If 'origin' doesn't exist, add it
+        Write-Host "+ git remote add origin $originUrl"
+        iu git remote add origin $originUrl
     }
 }
