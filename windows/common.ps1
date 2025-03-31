@@ -20,8 +20,8 @@ if (!(Test-Path .git)) {
     Write-Host "+ git remote add origin $Env:DRONE_REMOTE_URL"
     iu git remote add origin $Env:DRONE_REMOTE_URL
 } else {
-    Write-Host "+ git config --local --add safe.directory *"
-    iu git config --local --add safe.directory '*'
+    Write-Host "+ git config --global --add safe.directory *"
+    iu git config --global --add safe.directory '*'
 
     Set-OriginUrl -originUrl $Env:DRONE_REMOTE_URL
 

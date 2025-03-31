@@ -27,7 +27,7 @@ if [ ! -d .git ]; then
   set +x
 else
   set -x
-  git config --local --add safe.directory '*'
+  git config --gobal --add safe.directory '*'
   update_origin_url ${DRONE_REMOTE_URL}
   set +x
 fi
