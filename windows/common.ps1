@@ -9,7 +9,7 @@ function Set-OriginUrl {
         [string]$originUrl
     )
     # Check if the remote 'origin' exists
-    $originExists = git remote get-url origin -ErrorAction SilentlyContinue
+    $originExists = git remote get-url origin
 
     if ($originExists) {
         # If 'origin' exists, update its URL
