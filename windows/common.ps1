@@ -4,6 +4,24 @@
 Set-Alias iu Invoke-Utility
 Set-Alias sf Start-Fetch
 
+function Set-OriginUrl {
+    param (
+        [string]$originUrl
+    )
+    # Check if the remote 'origin' exists
+    $originExists = git remote get-url origin -ErrorAction SilentlyContinue
+
+    if ($originExists) {
+        # If 'origin' exists, update its URL
+        Write-Host "+ git remote set-url origin $originUrl"
+        iu git remote set-url origin $originUrl
+    } else {
+        # If 'origin' doesn't exist, add it
+        Write-Host "+ git remote add origin $originUrl"
+        iu git remote add origin $originUrl
+    }
+}
+
 if ($Env:DRONE_NETRC_DEBUG) {
     $Env:GIT_CURL_VERBOSE = 1
     $Env:GIT_TRACE = 1
@@ -57,23 +75,5 @@ if (-not [string]::IsNullOrEmpty($env:DRONE_NETRC_PRE_FETCH)) {
     foreach ($line in $lines) {
         Write-Host "+ $line"
         Invoke-Expression $line
-    }
-}
-
-function Set-OriginUrl {
-    param (
-        [string]$originUrl
-    )
-    # Check if the remote 'origin' exists
-    $originExists = git remote get-url origin -ErrorAction SilentlyContinue
-
-    if ($originExists) {
-        # If 'origin' exists, update its URL
-        Write-Host "+ git remote set-url origin $originUrl"
-        iu git remote set-url origin $originUrl
-    } else {
-        # If 'origin' doesn't exist, add it
-        Write-Host "+ git remote add origin $originUrl"
-        iu git remote add origin $originUrl
     }
 }
