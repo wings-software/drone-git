@@ -24,6 +24,7 @@ if (!(Test-Path .git)) {
     iu git config --global --add safe.directory '*'
 
     Set-OriginUrl -originUrl $Env:DRONE_REMOTE_URL
+}
 
 if ($env:DRONE_NETRC_LFS_ENABLED -eq "true") {
     Write-Host "+ git lfs install"
