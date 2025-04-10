@@ -4,6 +4,24 @@
 Set-Alias iu Invoke-Utility
 Set-Alias sf Start-Fetch
 
+function Set-OriginUrl {
+    param (
+        [string]$originUrl
+    )
+    # Check if the remote 'origin' exists
+    $originExists = git remote get-url origin
+
+    if ($originExists) {
+        # If 'origin' exists, update its URL
+        Write-Host "+ git remote set-url origin $originUrl"
+        iu git remote set-url origin $originUrl
+    } else {
+        # If 'origin' doesn't exist, add it
+        Write-Host "+ git remote add origin $originUrl"
+        iu git remote add origin $originUrl
+    }
+}
+
 if ($Env:DRONE_NETRC_DEBUG) {
     $Env:GIT_CURL_VERBOSE = 1
     $Env:GIT_TRACE = 1
@@ -13,12 +31,17 @@ if ($Env:DRONE_NETRC_DEBUG) {
 if (!(Test-Path .git)) {
     Write-Host '+ git init';
     iu git init
-    
+
     Write-Host "+ git config --global --add safe.directory *"
     iu git config --global --add safe.directory '*'
-    
+
     Write-Host "+ git remote add origin $Env:DRONE_REMOTE_URL"
     iu git remote add origin $Env:DRONE_REMOTE_URL
+} else {
+    Write-Host "+ git config --global --add safe.directory *"
+    iu git config --global --add safe.directory '*'
+
+    Set-OriginUrl -originUrl $Env:DRONE_REMOTE_URL
 }
 
 if ($env:DRONE_NETRC_LFS_ENABLED -eq "true") {
