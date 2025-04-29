@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,7 +12,7 @@ import (
 
 func copyDir(src, dst string) error {
 	// Get all files in source directory
-	files, err := ioutil.ReadDir(src)
+	files, err := os.ReadDir(src)
 	if err != nil {
 		return fmt.Errorf("failed to read directory %s: %v", src, err)
 	}
@@ -32,13 +31,13 @@ func copyDir(src, dst string) error {
 		}
 
 		// Read source file
-		content, err := ioutil.ReadFile(srcPath)
+		content, err := os.ReadFile(srcPath)
 		if err != nil {
 			return fmt.Errorf("failed to read file %s: %v", srcPath, err)
 		}
 
 		// Write to destination with executable permissions
-		if err := ioutil.WriteFile(dstPath, content, 0755); err != nil {
+		if err := os.WriteFile(dstPath, content, 0755); err != nil {
 			return fmt.Errorf("failed to write file %s: %v", dstPath, err)
 		}
 	}
@@ -54,12 +53,12 @@ func runGitClone() error {
 	}
 	baseDir := filepath.Dir(filepath.Dir(ex)) // Go up two levels from cmd/drone-git
 
-	// Create temp directory
-	tmpDir, err := ioutil.TempDir("", "drone-git-*")
+	// Create a unique temporary subdirectory
+	tmpDir, err := os.MkdirTemp("", "drone-git-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) // Safe now as tmpDir is a unique subdirectory
 
 	// Copy scripts to temp directory
 	if err := copyDir(baseDir, tmpDir); err != nil {
