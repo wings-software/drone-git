@@ -4,12 +4,18 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
+
+	"golang.org/x/exp/slog"
 )
+
+const mode os.FileMode = 0755
 
 //go:embed posix/* windows/*
 var scriptFS embed.FS // embedding both posix and windows directory scripts to be available to the binary
@@ -29,7 +35,7 @@ func writeScriptsToTemp(tmpDir string) error {
 		dstPath := filepath.Join(tmpDir, path)
 
 		if d.IsDir() {
-			return os.MkdirAll(dstPath, 0755)
+			return os.MkdirAll(dstPath, mode)
 		}
 
 		// Read and write the file
@@ -38,11 +44,10 @@ func writeScriptsToTemp(tmpDir string) error {
 			return fmt.Errorf("failed to read embedded file %s: %v", path, err)
 		}
 
-		if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(dstPath), mode); err != nil {
 			return fmt.Errorf("failed to create directory %s: %v", filepath.Dir(dstPath), err)
 		}
 
-		var mode os.FileMode = 0755
 		if err := os.WriteFile(dstPath, content, mode); err != nil {
 			return fmt.Errorf("failed to write file %s: %v", dstPath, err)
 		}
@@ -65,17 +70,21 @@ func runGitClone() error {
 
 	ctx := context.Background()
 
+	// current working directory (workspace)
+	workdir, err := os.Getwd()
+	if err != nil {
+		slog.Error("cannot get workdir", "error", err)
+		os.Exit(1)
+	}
+
 	switch runtime.GOOS {
 	case "windows":
 		scriptPath := filepath.Join(tmpDir, "windows", "clone.ps1")
 		script := fmt.Sprintf(
 			"$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; %s",
 			scriptPath)
-		cmd := exec.CommandContext(ctx, "pwsh", "-Command", script)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Env = os.Environ()
-		return cmd.Run()
+		cmd := exec.Command("pwsh", "-Command", script)
+		return runCmds(ctx, []*exec.Cmd{cmd}, os.Environ(), workdir, os.Stdout, os.Stderr)
 
 	case "linux", "darwin":
 		shell := "bash"
@@ -84,15 +93,33 @@ func runGitClone() error {
 		}
 
 		scriptPath := filepath.Join(tmpDir, "posix", "script")
-		cmd := exec.CommandContext(ctx, shell, scriptPath)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Env = os.Environ()
-		return cmd.Run()
+		cmd := exec.Command(shell, scriptPath)
+		return runCmds(ctx, []*exec.Cmd{cmd}, os.Environ(), workdir, os.Stdout, os.Stderr)
 
 	default:
 		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 	}
+}
+
+func runCmds(ctx context.Context, cmds []*exec.Cmd, env []string, workdir string,
+	stdout io.Writer, stderr io.Writer) error {
+	for _, cmd := range cmds {
+		cmd.Stdout = stdout
+		cmd.Stderr = stderr
+		cmd.Env = env
+		cmd.Dir = workdir
+		trace(cmd)
+
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func trace(cmd *exec.Cmd) {
+	s := fmt.Sprintf("+ %s\n", strings.Join(cmd.Args, " "))
+	slog.Debug(s)
 }
 
 func main() {
