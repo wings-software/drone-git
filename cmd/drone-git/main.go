@@ -12,33 +12,46 @@ import (
 
 func copyDir(src, dst string) error {
 	// Get all files in source directory
-	files, err := os.ReadDir(src)
+	entries, err := os.ReadDir(src)
 	if err != nil {
 		return fmt.Errorf("failed to read directory %s: %v", src, err)
 	}
 
-	if err := os.MkdirAll(dst, 0755); err != nil {
-		return fmt.Errorf("failed to create directory %s: %v", dst, err)
-	}
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
 
-	for _, file := range files {
-		srcPath := filepath.Join(src, file.Name())
-		dstPath := filepath.Join(dst, file.Name())
+		if entry.IsDir() {
+			// If it's posix or windows directory, copy it
+			if entry.Name() == "posix" || entry.Name() == "windows" {
+				if err := os.MkdirAll(dstPath, 0755); err != nil {
+					return fmt.Errorf("failed to create directory %s: %v", dstPath, err)
+				}
 
-		// Skip if it's a directory or not a script file
-		if file.IsDir() || strings.HasSuffix(file.Name(), ".go") {
-			continue
-		}
+				// Copy contents of the directory
+				subEntries, err := os.ReadDir(srcPath)
+				if err != nil {
+					return fmt.Errorf("failed to read directory %s: %v", srcPath, err)
+				}
 
-		// Read source file
-		content, err := os.ReadFile(srcPath)
-		if err != nil {
-			return fmt.Errorf("failed to read file %s: %v", srcPath, err)
-		}
+				for _, subEntry := range subEntries {
+					if subEntry.IsDir() || strings.HasSuffix(subEntry.Name(), ".go") {
+						continue
+					}
 
-		// Write to destination with executable permissions
-		if err := os.WriteFile(dstPath, content, 0755); err != nil {
-			return fmt.Errorf("failed to write file %s: %v", dstPath, err)
+					srcFile := filepath.Join(srcPath, subEntry.Name())
+					dstFile := filepath.Join(dstPath, subEntry.Name())
+
+					content, err := os.ReadFile(srcFile)
+					if err != nil {
+						return fmt.Errorf("failed to read file %s: %v", srcFile, err)
+					}
+
+					if err := os.WriteFile(dstFile, content, 0755); err != nil {
+						return fmt.Errorf("failed to write file %s: %v", dstFile, err)
+					}
+				}
+			}
 		}
 	}
 
