@@ -83,8 +83,8 @@ func runGitClone() error {
 		script := fmt.Sprintf(
 			"$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; %s",
 			scriptPath)
-		cmd := exec.Command("pwsh", "-Command", script)
-		return runCmds(ctx, []*exec.Cmd{cmd}, os.Environ(), workdir, os.Stdout, os.Stderr)
+		cmd := exec.CommandContext(ctx, "pwsh", "-Command", script)
+		return runCmds([]*exec.Cmd{cmd}, os.Environ(), workdir, os.Stdout, os.Stderr)
 
 	case "linux", "darwin":
 		shell := "bash"
@@ -93,15 +93,15 @@ func runGitClone() error {
 		}
 
 		scriptPath := filepath.Join(tmpDir, "posix", "script")
-		cmd := exec.Command(shell, scriptPath)
-		return runCmds(ctx, []*exec.Cmd{cmd}, os.Environ(), workdir, os.Stdout, os.Stderr)
+		cmd := exec.CommandContext(ctx, shell, scriptPath)
+		return runCmds([]*exec.Cmd{cmd}, os.Environ(), workdir, os.Stdout, os.Stderr)
 
 	default:
 		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 	}
 }
 
-func runCmds(ctx context.Context, cmds []*exec.Cmd, env []string, workdir string,
+func runCmds(cmds []*exec.Cmd, env []string, workdir string,
 	stdout io.Writer, stderr io.Writer) error {
 	for _, cmd := range cmds {
 		cmd.Stdout = stdout
