@@ -11,6 +11,7 @@ import (
 	"runtime"
 )
 
+//go:embed posix/* windows/*
 var scriptFS embed.FS
 
 func writeScriptsToTemp(tmpDir string) error {
