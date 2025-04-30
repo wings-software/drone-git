@@ -12,7 +12,7 @@ import (
 )
 
 //go:embed posix/* windows/*
-var scriptFS embed.FS
+var scriptFS embed.FS // embedding both posix and windows directory scripts to be available to the binary
 
 func writeScriptsToTemp(tmpDir string) error {
 	// Walk through the embedded filesystem and write all files
@@ -61,17 +61,6 @@ func runGitClone() error {
 
 	if err := writeScriptsToTemp(tmpDir); err != nil {
 		return err
-	}
-
-	// List contents of temp directory
-	entries, err := os.ReadDir(tmpDir)
-	if err != nil {
-		fmt.Printf("Error reading temp dir: %v\n", err)
-	} else {
-		fmt.Printf("Contents of %s:\n", tmpDir)
-		for _, entry := range entries {
-			fmt.Printf("%s\n", entry.Name())
-		}
 	}
 
 	ctx := context.Background()
