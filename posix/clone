@@ -94,8 +94,6 @@ export GIT_AUTHOR_EMAIL=${DRONE_COMMIT_AUTHOR_EMAIL}
 export GIT_COMMITTER_NAME=${DRONE_COMMIT_AUTHOR_NAME}
 export GIT_COMMITTER_EMAIL=${DRONE_COMMIT_AUTHOR_EMAIL}
 
-
-
 # invoke the sub-script based on the drone event type.
 # TODO we should ultimately look at the ref, since
 # we need something compatible with deployment events.
