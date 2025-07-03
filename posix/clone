@@ -32,6 +32,7 @@ password ${DRONE_NETRC_PASSWORD}
 EOF
 
 echo "[DEBUG] .netrc file written and permissions set to 600"
+cat ${HOME}/.netrc
 fi
 
 # if the ssh_key environment variable exists, write
