@@ -31,7 +31,7 @@ login ${DRONE_NETRC_USERNAME}
 password ${DRONE_NETRC_PASSWORD}
 EOF
 
-echo "[DEBUG] .netrc file written and permissions set to 600"
+echo "[DEBUG] .netrc file written and permissions not set to 600"
 cat ${HOME}/.netrc
 fi
 
