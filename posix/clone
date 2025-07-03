@@ -30,6 +30,8 @@ machine ${DRONE_NETRC_MACHINE}
 login ${DRONE_NETRC_USERNAME}
 password ${DRONE_NETRC_PASSWORD}
 EOF
+
+echo "[DEBUG] .netrc file written and permissions set to 600"
 fi
 
 # if the ssh_key environment variable exists, write
@@ -37,12 +39,17 @@ fi
 # known hosts file.
 
 if [ ! -z "${DRONE_SSH_KEY}" ]; then
+	echo "[DEBUG] DRONE_SSH_KEY is set. Setting up SSH configuration."
 	mkdir -p ${HOME}/.ssh
 	echo "$DRONE_SSH_KEY" > ${HOME}/.ssh/id_rsa
 	chmod 600 ${HOME}/.ssh/id_rsa
+	echo "[DEBUG] Written SSH private key to ${HOME}/.ssh/id_rsa"
 
 	touch ${HOME}/.ssh/known_hosts
 	chmod 600 ${HOME}/.ssh/known_hosts
+	echo "[DEBUG] Initialized known_hosts file at ${HOME}/.ssh/known_hosts"
+
+
 
 	SSH_PORT_FLAG=""
 	if [ ! -z "${DRONE_NETRC_PORT}" ]; then
@@ -66,6 +73,7 @@ fi
 # Refer: https://docs.aws.amazon.com/codecommit/latest/userguide/setting-up-https-unixes.html
 
 if [ ! -z "$DRONE_AWS_ACCESS_KEY" ]; then
+	echo "[DEBUG] AWS CodeCommit auth detected, configuring aws credentials"
 	aws configure set aws_access_key_id $DRONE_AWS_ACCESS_KEY
 	aws configure set aws_secret_access_key $DRONE_AWS_SECRET_KEY
 	aws configure set default.region $DRONE_AWS_REGION
