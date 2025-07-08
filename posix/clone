@@ -2,7 +2,7 @@
 
 set -e
 
-echo "[DEBUG] Script started"
+echo "[DEBUG] Script started 1"
 
 # if PLUGIN_ONLY_COPY_FILE_CONTENT is set, only copy the file content
 if [ "$PLUGIN_ONLY_COPY_FILE_CONTENT" = "true" ]; then
@@ -30,16 +30,18 @@ fi
 # the netrc file.
 
 if [ ! -z "${DRONE_NETRC_MACHINE}" ]; then
-	cat <<EOF > /harness/.netrc
+	cat <<EOF > ~/.netrc
 machine ${DRONE_NETRC_MACHINE}
 login ${DRONE_NETRC_USERNAME}
 password ${DRONE_NETRC_PASSWORD}
 EOF
+
 	cat <<EOF > ${HOME}/.netrc
 machine ${DRONE_NETRC_MACHINE}
 login ${DRONE_NETRC_USERNAME}
 password ${DRONE_NETRC_PASSWORD}
 EOF
+
 	echo "[DEBUG] .netrc file written and permissions not set to 600"
 	cat ${HOME}/.netrc
 fi
