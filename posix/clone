@@ -2,14 +2,18 @@
 
 set -e
 
+echo "[DEBUG] Script started"
+
 # if PLUGIN_ONLY_COPY_FILE_CONTENT is set, only copy the file content
 if [ "$PLUGIN_ONLY_COPY_FILE_CONTENT" = "true" ]; then
+	echo "[DEBUG] PLUGIN_ONLY_COPY_FILE_CONTENT is true, calling copy-file-content and exiting"
 	copy-file-content
 	exit 0
 fi
 
 # force the home directory path.
 if [ "$HOME" != "/home/drone" ]; then
+	echo "[DEBUG] HOME is not /home/drone, current HOME=$HOME"
 	if [ -d "/home/drone" ]; then
 		echo "[DEBUG] setting default home directory"
 		export HOME=/home/drone
@@ -17,6 +21,7 @@ if [ "$HOME" != "/home/drone" ]; then
 fi
 
 if [ ! -z "${DRONE_WORKSPACE}" ]; then
+	echo "[DEBUG] DRONE_WORKSPACE is set to ${DRONE_WORKSPACE}, creating directory and changing to it"	
 	mkdir -p ${DRONE_WORKSPACE}
 	cd ${DRONE_WORKSPACE}
 fi
@@ -25,14 +30,18 @@ fi
 # the netrc file.
 
 if [ ! -z "${DRONE_NETRC_MACHINE}" ]; then
+	cat <<EOF > /harness/.netrc
+machine ${DRONE_NETRC_MACHINE}
+login ${DRONE_NETRC_USERNAME}
+password ${DRONE_NETRC_PASSWORD}
+EOF
 	cat <<EOF > ${HOME}/.netrc
 machine ${DRONE_NETRC_MACHINE}
 login ${DRONE_NETRC_USERNAME}
 password ${DRONE_NETRC_PASSWORD}
 EOF
-
-echo "[DEBUG] .netrc file written and permissions not set to 600"
-cat ${HOME}/.netrc
+	echo "[DEBUG] .netrc file written and permissions not set to 600"
+	cat ${HOME}/.netrc
 fi
 
 # if the ssh_key environment variable exists, write
@@ -55,17 +64,21 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 	SSH_PORT_FLAG=""
 	if [ ! -z "${DRONE_NETRC_PORT}" ]; then
 		SSH_PORT_FLAG="-p ${DRONE_NETRC_PORT}"
+		echo "[DEBUG] SSH_PORT_FLAG set to ${SSH_PORT_FLAG}"
 	fi
 
 	SSH_KEYSCAN_TIMEOUT_FLAG=""
 	if [ ! -z "${PLUGIN_SSH_KEYSCAN_TIMEOUT}" ]; then
 		SSH_KEYSCAN_TIMEOUT_FLAG="-T ${PLUGIN_SSH_KEYSCAN_TIMEOUT}"
+		echo "[DEBUG] SSH_KEYSCAN_TIMEOUT_FLAG set to ${SSH_KEYSCAN_TIMEOUT_FLAG}"
 	fi
 
 	if [ ! -z "${DRONE_SSH_PASSPHRASE}" ]; then
+		echo "[DEBUG] DRONE_SSH_PASSPHRASE is set, updating ssh passphrase"
 		ssh-keygen -p -f ${HOME}/.ssh/id_rsa -P ${DRONE_SSH_PASSPHRASE} -N ""
 	fi
 
+	echo "[DEBUG] Running ssh-keyscan for ${DRONE_NETRC_MACHINE}"
 	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2> /dev/null
 	export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
 fi
@@ -81,6 +94,7 @@ if [ ! -z "$DRONE_AWS_ACCESS_KEY" ]; then
 
 	git config --global credential.helper '!aws codecommit credential-helper $@'
 	git config --global credential.UseHttpPath true
+	echo "[DEBUG] AWS CodeCommit git credential helper configured"
 fi
 
 # configure git global behavior and parameters via the
@@ -88,10 +102,12 @@ fi
 
 
 if [ -z "${DRONE_COMMIT_AUTHOR_NAME}" ]; then
+	echo "[DEBUG] DRONE_COMMIT_AUTHOR_NAME not set, defaulting to 'drone'"
 	export DRONE_COMMIT_AUTHOR_NAME=drone
 fi
 
 if [ -z "${DRONE_COMMIT_AUTHOR_EMAIL}" ]; then
+	echo "[DEBUG] DRONE_COMMIT_AUTHOR_EMAIL not set, defaulting to 'drone@localhost'"
 	export DRONE_COMMIT_AUTHOR_EMAIL=drone@localhost
 fi
 
@@ -103,6 +119,7 @@ export GIT_COMMITTER_EMAIL=${DRONE_COMMIT_AUTHOR_EMAIL}
 # invoke the sub-script based on the drone event type.
 # TODO we should ultimately look at the ref, since
 # we need something compatible with deployment events.
+echo "[DEBUG] Git identity configured: ${GIT_AUTHOR_NAME} <${GIT_AUTHOR_EMAIL}>"
 
 CLONE_TYPE=$DRONE_BUILD_EVENT
 case $DRONE_COMMIT_REF in
@@ -116,12 +133,15 @@ common
 
 case $CLONE_TYPE in
 pull_request)
+	echo "[DEBUG] Running clone-pull-request"
 	clone-pull-request
 	;;
 tag)
+	echo "[DEBUG] Running clone-tag"
 	clone-tag
 	;;
 *)
+	echo "[DEBUG] Running clone-commit"
 	clone-commit
 	;;
 esac
@@ -133,3 +153,5 @@ copy-file-content
 if [ -n "$PLUGIN_BUILD_TOOL_FILE" ] && [ -z "$CI_DISABLE_TELEMETRY" ]; then
     get-buildtool-lang || true
 fi
+
+echo "[DEBUG] Script completed"
