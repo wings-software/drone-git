@@ -2,7 +2,7 @@
 
 set -e
 
-echo "[DEBUG] Script started 3"
+echo "[DEBUG] Script started 4"
 
 # if PLUGIN_ONLY_COPY_FILE_CONTENT is set, only copy the file content
 if [ "$PLUGIN_ONLY_COPY_FILE_CONTENT" = "true" ]; then
@@ -24,13 +24,6 @@ if [ ! -z "${DRONE_WORKSPACE}" ]; then
 	echo "[DEBUG] DRONE_WORKSPACE is set to ${DRONE_WORKSPACE}, creating directory and changing to it"	
 	mkdir -p ${DRONE_WORKSPACE}
 	cd ${DRONE_WORKSPACE}
-	cat <<EOF > root/.netrc
-machine ${DRONE_NETRC_MACHINE}
-login ${DRONE_NETRC_USERNAME}
-password ${DRONE_NETRC_PASSWORD}
-EOF
-	chmod 600 .netrc
-	 
 fi
 
 # if the netrc enviornment variables exist, write
