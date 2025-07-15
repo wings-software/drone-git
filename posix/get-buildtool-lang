@@ -54,6 +54,81 @@ detect_build_tool() {
     elif [ -f "$repo_path"/*.csproj ]; then
         build_tool="Dotnet"
     fi
+    
+    # Check for Android
+    if [ -f "$repo_path/AndroidManifest.xml" ] || \
+       [ -d "$repo_path/android" ] || \
+       ([ -f "$repo_path/build.gradle" ] && grep -q "com\.android\.tools\.build" "$repo_path/build.gradle") || \
+       ([ -f "$repo_path/app/build.gradle" ] && grep -q "com\.android\.application\|android {" "$repo_path/app/build.gradle"); then
+        if [ -z "$build_tool" ]; then
+            build_tool="Android"
+        else
+            build_tool="$build_tool,Android"
+        fi
+    fi
+    
+    # Check for iOS
+    if ([ -d "$repo_path/ios" ] && find "$repo_path/ios" -name "*.pbxproj" | grep -q .) || \
+       (find "$repo_path" -name "*.xcodeproj" -o -name "*.xcworkspace" | grep -q . && \
+        find "$repo_path" -name "Info.plist" | grep -q .); then
+        if [ -z "$build_tool" ]; then
+            build_tool="iOS"
+        else
+            build_tool="$build_tool,iOS"
+        fi
+    fi
+    
+    # Check for React Native
+    if ([ -f "$repo_path/package.json" ] && grep -q '"react-native"' "$repo_path/package.json") && \
+       ([ -f "$repo_path/App.js" ] || [ -f "$repo_path/index.js" ] || \
+        [ -d "$repo_path/ios" ] && [ -d "$repo_path/android" ]); then
+        if [ -z "$build_tool" ]; then
+            build_tool="ReactNative"
+        else
+            build_tool="$build_tool,ReactNative"
+        fi
+    fi
+    
+    # Check for Flutter
+    if ([ -f "$repo_path/pubspec.yaml" ] && grep -q 'flutter:' "$repo_path/pubspec.yaml") || \
+       ([ -f "$repo_path/pubspec.yml" ] && grep -q 'flutter:' "$repo_path/pubspec.yml") || \
+       ([ -d "$repo_path/ios" ] && [ -d "$repo_path/android" ] && \
+        find "$repo_path" -name "*.dart" | grep -q . && \
+        ([ -d "$repo_path/lib" ] || [ -f "$repo_path/.metadata" ] && grep -q 'flutter' "$repo_path/.metadata")); then
+        if [ -z "$build_tool" ]; then
+            build_tool="Flutter"
+        else
+            build_tool="$build_tool,Flutter"
+        fi
+    fi
+    
+    # Check for Fastlane
+    if [ -f "$repo_path/fastlane/Fastfile" ] || \
+       ([ -d "$repo_path/fastlane" ] && [ -f "$repo_path/Gemfile" ] && grep -q 'fastlane' "$repo_path/Gemfile"); then
+        if [ -z "$build_tool" ]; then
+            build_tool="Fastlane"
+        else
+            build_tool="$build_tool,Fastlane"
+        fi
+    fi
+    
+    # Check for Jest
+    if [ -f "$repo_path/jest.config.js" ] || [ -f "$repo_path/jest.config.ts" ] || ([ -f "$repo_path/package.json" ] && grep -q '"jest"' "$repo_path/package.json"); then
+        if [ -z "$build_tool" ]; then
+            build_tool="Jest"
+        else
+            build_tool="$build_tool,Jest"
+        fi
+    fi
+    
+    # Check for Cypress
+    if [ -f "$repo_path/cypress.json" ] || [ -f "$repo_path/cypress.config.js" ] || [ -d "$repo_path/cypress" ] || ([ -f "$repo_path/package.json" ] && grep -q '"cypress"' "$repo_path/package.json"); then
+        if [ -z "$build_tool" ]; then
+            build_tool="Cypress"
+        else
+            build_tool="$build_tool,Cypress"
+        fi
+    fi
 
     # Return the detected build tool
     echo "$build_tool"
