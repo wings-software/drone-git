@@ -10,6 +10,7 @@ if [ "$PLUGIN_ONLY_COPY_FILE_CONTENT" = "true" ]; then
 	exit 0
 fi
 
+
 # force the home directory path.
 if [ "$HOME" != "/home/drone" ]; then
 	if [ -d "/home/drone" ]; then
