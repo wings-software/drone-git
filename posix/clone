@@ -2,7 +2,7 @@
 
 set -e
 
-echo "devtest2:test2"
+echo "devtest2:test3"
 
 # if PLUGIN_ONLY_COPY_FILE_CONTENT is set, only copy the file content
 if [ "$PLUGIN_ONLY_COPY_FILE_CONTENT" = "true" ]; then
