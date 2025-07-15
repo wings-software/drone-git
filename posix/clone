@@ -2,7 +2,7 @@
 
 set -e
 
-echo "devtest2:test3"
+echo "devtest2:test4"
 
 # if PLUGIN_ONLY_COPY_FILE_CONTENT is set, only copy the file content
 if [ "$PLUGIN_ONLY_COPY_FILE_CONTENT" = "true" ]; then
@@ -33,8 +33,11 @@ machine ${DRONE_NETRC_MACHINE}
 login ${DRONE_NETRC_USERNAME}
 password ${DRONE_NETRC_PASSWORD}
 EOF
+echo "[DEBUG] added netrc"
 fi
 
+echo "[DEBUG] addint to home"
+ls -a /root
 	cat <<EOF > /root/.netrc
 machine ${DRONE_NETRC_MACHINE}
 login ${DRONE_NETRC_USERNAME}
