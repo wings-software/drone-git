@@ -2,7 +2,7 @@
 
 set -e
 
-echo "devtest2:test15"
+echo "devtest2:test16"
 
 # if PLUGIN_ONLY_COPY_FILE_CONTENT is set, only copy the file content
 if [ "$PLUGIN_ONLY_COPY_FILE_CONTENT" = "true" ]; then
@@ -39,11 +39,11 @@ fi
 echo "[DEBUG] addint to home"
 echo $HOME
 
-	cat <<EOF > /root/.netrc
-machine ${DRONE_NETRC_MACHINE}
-login ${DRONE_NETRC_USERNAME}
-password ${DRONE_NETRC_PASSWORD}
-EOF
+# 	cat <<EOF > /root/.netrc
+# machine ${DRONE_NETRC_MACHINE}
+# login ${DRONE_NETRC_USERNAME}
+# password ${DRONE_NETRC_PASSWORD}
+# EOF
 
 # if the ssh_key environment variable exists, write
 # the ssh key and add the netrc machine to the
