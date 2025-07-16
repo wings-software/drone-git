@@ -23,12 +23,11 @@ RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
 
 RUN groupadd drone && adduser -g drone -s /bin/sh -u 1000 drone
 
-#RUN chmod 666 /root
-#  && chown drone:drone /root
+# RUN chmod 666 /root
+RUN chown drone:drone /root
 # RUN touch /root/.netrc && chown drone:drone /root/.netrc && chmod 600 /root/.netrc
 
 USER drone:drone
 RUN chmod -R 777 /home/drone
-RUN chmod -R 777 /root
 
 ENTRYPOINT ["/usr/local/bin/clone"]
