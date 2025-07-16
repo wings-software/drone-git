@@ -37,7 +37,14 @@ echo "[DEBUG] added netrc"
 fi
 
 echo "[DEBUG] addint to home"
-[ -f /root/.netrc ] && echo ".netrc exists" || echo ".netrc does not exist"
+
+if [ ! -f /root/.netrc ]; then
+	mkdir -p /root
+    echo "[DEBUG] .netrc doesn't exist, creating it"
+    touch /root/.netrc
+    chmod 600 /root/.netrc
+fi
+
 	cat <<EOF > /root/.netrc
 machine ${DRONE_NETRC_MACHINE}
 login ${DRONE_NETRC_USERNAME}
