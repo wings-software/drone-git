@@ -22,15 +22,9 @@ RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
 
 
 RUN groupadd drone && adduser -g drone -s /bin/sh -u 1000 drone
-RUN microdnf install acl
-# RUN chmod 755 /root && chown drone:drone /root
+
+RUN chmod 755 /root && chown drone:drone /root
 # RUN touch /root/.netrc && chown drone:drone /root/.netrc && chmod 600 /root/.netrc
-
-
-RUN mkdir -p /opt/drone && chown drone:drone /opt/drone
-RUN touch /opt/drone/.netrc && chown drone:drone /opt/drone/.netrc && chmod 600 /opt/drone/.netrc
-
-RUN ln -s /opt/drone/.netrc /root/.netrc
 
 USER drone:drone
 RUN chmod -R 777 /home/drone
