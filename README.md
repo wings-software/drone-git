@@ -8,7 +8,7 @@ chmod +x ./git-hooks/install.sh
 ./git-hooks/install.sh
 ```
 
-## Build
+## Build 
 
 Build the Docker image with the following commands:
 
