@@ -2,8 +2,7 @@ FROM redhat/ubi9-minimal:9.6
 USER root
 
 RUN microdnf update --nodocs --setopt=install_weak_deps=0 \
- && microdnf remove -y curl-minimal \
- && microdnf install --nodocs \
+ && microdnf install --nodocs --allowerasing \
       ca-certificates \
       git \
       tar \
@@ -13,6 +12,7 @@ RUN microdnf update --nodocs --setopt=install_weak_deps=0 \
       python3.11 \
       python3-pip \
       shadow-utils
+
 RUN pip-3 install awscli
 
 RUN curl -L https://github.com/git-lfs/git-lfs/releases/download/v3.6.0/git-lfs-linux-amd64-v3.6.0.tar.gz > git-lfs.tar.gz \
