@@ -22,16 +22,9 @@ password $Env:DRONE_NETRC_PASSWORD
 }
 
 if ($Env:DRONE_PERSIST_CREDS) {
-    # Define the path to the file in the current user's profile
     $sourcePath = Join-Path $Env:USERPROFILE '_netrc';
-    
-    # Define the destination path in the shared volume
     $destinationPath = 'C:\addon\shared\_netrc';
-
-    # Ensure the parent directory for the destination exists
     New-Item -ItemType Directory -Path (Split-Path $destinationPath) -Force;
-    
-    # Check if the file was created and then copy it to the shared volume
     if (Test-Path -Path $sourcePath) {
         Copy-Item -Path $sourcePath -Destination $destinationPath -Force;
     }
