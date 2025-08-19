@@ -3,8 +3,8 @@ USER root
 RUN microdnf update -y --nodocs --setopt=install_weak_deps=0 && microdnf install -y --nodocs ca-certificates git tar openssh perl python3.11 python3-pip shadow-utils
 RUN pip-3 install awscli
 
-RUN curl -L https://github.com/git-lfs/git-lfs/releases/download/v3.6.0/git-lfs-linux-amd64-v3.6.0.tar.gz > git-lfs.tar.gz \
-    && tar -xvzf git-lfs.tar.gz && mv git-lfs-3.6.0/git-lfs /usr/local/bin/git-lfs
+RUN curl -L https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-linux-amd64-v3.7.0.tar.gz > git-lfs.tar.gz \
+    && tar -xvzf git-lfs.tar.gz && mv git-lfs-3.7.0/git-lfs /usr/local/bin/git-lfs
 
 ADD posix/clone posix/clone-commit posix/clone-pull-request posix/clone-tag posix/fixtures.sh posix/common posix/post-fetch posix/copy-file-content posix/get-buildtool-lang /usr/local/bin/
 RUN chmod -R 777 /etc/ssh

@@ -10,9 +10,9 @@ RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tl
     Invoke-WebRequest -UseBasicParsing https://github.com/git-for-windows/git/releases/download/v2.39.2.windows.1/MinGit-2.39.2-64-bit.zip -OutFile git.zip; `
     Expand-Archive git.zip -DestinationPath C:\git;
 
-# Download and extract Git LFS (Updated to v3.6.0)
+# Download and extract Git LFS (Updated to v3.7.0)
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
-    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.6.0/git-lfs-windows-amd64-v3.6.0.zip -OutFile git-lfs.zip; `
+    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-windows-amd64-v3.7.0.zip -OutFile git-lfs.zip; `
     Expand-Archive git-lfs.zip -DestinationPath C:\git-lfs;
 
 RUN Add-WindowsCapability -Online -Name OpenSSH.Client*

@@ -9,7 +9,7 @@ RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tl
 
 # Download and extract Git LFS
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
-    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.6.0/git-lfs-windows-amd64-v3.6.0.zip -OutFile git-lfs.zip; `
+    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-windows-amd64-v3.7.0.zip -OutFile git-lfs.zip; `
     Expand-Archive git-lfs.zip -DestinationPath C:\git-lfs;
 
 FROM mcr.microsoft.com/powershell:nanoserver-1803 
