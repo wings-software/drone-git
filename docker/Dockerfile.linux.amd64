@@ -19,5 +19,5 @@ RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
 
 ADD posix/* /usr/local/bin/
 
-ENTRYPOINT ["/usr/local/bin/clone"] 
+ENTRYPOINT ["/usr/local/bin/clone-retry-wrapper"]
 

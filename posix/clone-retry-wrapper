@@ -1,0 +1,96 @@
+#!/bin/sh
+
+set -u
+
+# Path to clone script (must be in PATH or absolute path)
+CLONE_CMD="clone"
+
+validate_positive_integer_env_var() {
+  name="$1"
+  # indirect expansion in POSIX sh via eval
+  eval "value=\${$name:-}"
+
+  if [ -z "$value" ]; then
+    echo "+ ERROR: Environment variable $name is not set or is empty."
+    exit 1
+  fi
+
+  case "$value" in
+    *[!0-9]*|'') # not a number
+      echo "+ ERROR: Environment variable $name must be a positive integer (got '$value')."
+      exit 1
+      ;;
+    0) # zero is not positive
+      echo "+ ERROR: Environment variable $name must be a positive integer (got '$value')."
+      exit 1
+      ;;
+  esac
+}
+
+cleanup() {
+  dir="$PWD"
+
+  # Safety checks: refuse to clean critical dirs
+  case "$dir" in
+    "/"|"/home"|"/root"|"/etc"|"/var"|"/usr"|"/bin"|"/sbin"|"/opt"|"")
+      echo "+ ERROR: Unsafe directory for cleanup: $dir"
+      exit 1
+      ;;
+  esac
+
+  # Reject $HOME explicitly
+  if [ "$dir" = "$HOME" ]; then
+    echo "+ ERROR: Cleanup attempt in HOME directory ($HOME) is not allowed."
+    exit 1
+  fi
+
+  # Reject top-level dirs (like /foo)
+  depth=$(echo "$dir" | awk -F/ '{print NF-1}')
+  if [ "$depth" -le 1 ]; then
+    echo "+ ERROR: Directory $dir is too shallow for safe cleanup."
+    exit 1
+  fi
+
+  echo "+ Removing all files in $dir..."
+  rm -rf -- ./* ./.??* || true
+}
+
+attempt=1
+while true; do
+  $CLONE_CMD
+  code=$?
+
+  if [ "$code" -eq 0 ]; then
+    exit 0
+  fi
+
+  # If Git Clone retries are disabled, exit immediately
+  if [ "${HARNESS_CLONE_RETRY:-}" != "true" ]; then
+    exit "$code"
+  fi
+
+  # First attempt failed -> validate env vars before retrying
+  validate_positive_integer_env_var "HARNESS_CLONE_MAX_RETRIES"
+  validate_positive_integer_env_var "HARNESS_CLONE_RETRY_SLEEP_SECS"
+
+  # Load vars
+  MAX_RETRIES=$(eval "echo \${HARNESS_CLONE_MAX_RETRIES}")
+  SLEEP_SECS=$(eval "echo \${HARNESS_CLONE_RETRY_SLEEP_SECS}")
+
+  if [ "$attempt" -gt "$MAX_RETRIES" ]; then
+    echo "+ clone failed with code $code after $attempt attempts. Aborting."
+    exit "$code"
+  fi
+  echo "+ clone failed with code $code. Retrying after cleanup in $SLEEP_SECS seconds... (retry $attempt of $MAX_RETRIES)"
+
+  echo "+ starting cleanup..."
+  cleanup
+  cleanup_code=$?
+  if [ "$cleanup_code" -ne 0 ]; then
+    echo "+ cleanup failed with code $cleanup_code"
+    exit "$cleanup_code"
+  fi
+
+  sleep "$SLEEP_SECS"
+  attempt=$((attempt + 1))
+done
