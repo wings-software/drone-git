@@ -1,30 +1,65 @@
 # escape=`
 
-FROM mcr.microsoft.com/windows/servercore:ltsc2025 AS git
-SHELL ["powershell.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+FROM mcr.microsoft.com/windows/servercore:ltsc2025 AS tools
+SHELL ["powershell.exe", "-NoLogo", "-ExecutionPolicy", "Bypass", "-Command", "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue';"]
 
+# Install MiniGit 2.39.2 (64-bit)
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
-    Invoke-WebRequest -UseBasicParsing https://github.com/git-for-windows/git/releases/download/v2.39.2.windows.1/MinGit-2.39.2-64-bit.zip -OutFile git.zip; `
-    Expand-Archive git.zip -DestinationPath C:\git;
+    Invoke-WebRequest -UseBasicParsing `
+        https://github.com/git-for-windows/git/releases/download/v2.39.2.windows.1/MinGit-2.39.2-64-bit.zip `
+        -OutFile git.zip ; `
+    Expand-Archive git.zip -DestinationPath C:\git ; `
+    Remove-Item git.zip
 
-# Download and extract Git LFS
+# Install Git LFS 3.7.0
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
-    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-windows-amd64-v3.7.0.zip -OutFile git-lfs.zip; `
-    Expand-Archive git-lfs.zip -DestinationPath C:\git-lfs;
+    Invoke-WebRequest -UseBasicParsing `
+        https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-windows-amd64-v3.7.0.zip `
+        -OutFile git-lfs.zip ; `
+    Expand-Archive git-lfs.zip -DestinationPath C:\git-lfs ; `
+    Remove-Item git-lfs.zip
 
+# Enable built-in OpenSSH client
 RUN Add-WindowsCapability -Online -Name OpenSSH.Client*
 
-FROM mcr.microsoft.com/powershell:windowsservercore-ltsc2025
-COPY --from=git /git /git
-COPY --from=git /git-lfs /git-lfs
+# Stage to download and extract PowerShell 7.4.6 ZIP (no MSI, smaller image)
+FROM mcr.microsoft.com/windows/servercore:ltsc2025 AS installer-env
+SHELL ["C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "-Command"]
+RUN $ProgressPreference = 'SilentlyContinue'; `
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12; `
+    Invoke-WebRequest -Uri "https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.zip" -OutFile C:\powershell.zip -UseBasicParsing; `
+    Expand-Archive C:\powershell.zip -DestinationPath C:\PowerShell
 
-COPY --from=git C:\Windows\System32\OpenSSH\ /openssh
+FROM mcr.microsoft.com/windows/servercore:ltsc2025 AS final
+# Recommended environment variables for PowerShell images
+ENV ProgramFiles="C:\\Program Files" `
+    PSModuleAnalysisCachePath="C:\\Users\\Public\\AppData\\Local\\Microsoft\\Windows\\PowerShell\\docker\\ModuleAnalysisCache" `
+    PSCORE="$ProgramFiles\\PowerShell\\latest\\pwsh.exe" `
+    POWERSHELL_DISTRIBUTION_CHANNEL="PSDocker-WindowsServerCore-ltsc2025" `
+    POWERSHELL_TELEMETRY_OPTOUT="1"
 
+# Copy PowerShell Core from the installer stage
+COPY --from=installer-env ["C:\\PowerShell\\", "$ProgramFiles\\PowerShell\\latest\\"]
+
+# Copy Git, Git LFS, and OpenSSH from stage 1
+COPY --from=tools /git        /git
+COPY --from=tools /git-lfs    /git-lfs
+COPY --from=tools C:\\Windows\\System32\\OpenSSH\\ /openssh
+
+# Copy your helper scripts
 ADD windows/* /bin/
 
-# https://github.com/PowerShell/PowerShell/issues/6211#issuecomment-367477137
+# Update PATH for all users
 USER ContainerAdministrator
-RUN setx /M PATH "%PATH%;C:\Program Files\PowerShell;C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;C:\git-lfs\git-lfs-3.7.0"
+RUN ["C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe","-NoLogo","-ExecutionPolicy","Bypass","-Command","$p = [Environment]::GetEnvironmentVariable('Path','Machine'); $p = $p + ';' + \"$env:ProgramFiles\\PowerShell\\latest\" + ';C:\\git\\cmd;C:\\git\\mingw64\\bin;C:\\git\\usr\\bin;C:\\openssh;C:\\git-lfs\\git-lfs-3.7.0'; [Environment]::SetEnvironmentVariable('Path',$p,'Machine'); $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine')"]
 
-SHELL ["pwsh", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
-CMD [ "pwsh", "C:\\bin\\clone.ps1" ]
+# Initialize PowerShell module analysis cache
+RUN ["C:\\Program Files\\PowerShell\\latest\\pwsh.exe","-NoLogo","-NoProfile","-Command","$stopTime=(Get-Date).AddMinutes(15); $ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; while(!(Test-Path -Path $env:PSModuleAnalysisCachePath)) { Write-Host ('Waiting for ' + $env:PSModuleAnalysisCachePath); if((Get-Date) -gt $stopTime) { throw 'timeout expired' } Start-Sleep -Seconds 6 }"]
+
+# Re-enable telemetry to default behavior (optional)
+ENV POWERSHELL_TELEMETRY_OPTOUT="0"
+
+# Switch to PowerShell 7 as the interactive shell & default command
+SHELL ["C:\\Program Files\\PowerShell\\latest\\pwsh.exe", "-NoLogo", "-Command", "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue';"]
+
+CMD ["pwsh", "C:\\bin\\clone.ps1"]
