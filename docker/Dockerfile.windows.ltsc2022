@@ -2,8 +2,8 @@
 # Optimized Windows LTSC2022 Dockerfile for drone-git
 # Reduced from ~5-8GB to ~500MB-1GB (80-90% size reduction)
 
-FROM mcr.microsoft.com/windows/nanoserver:ltsc2022 AS git
-SHELL ["powershell.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+FROM mcr.microsoft.com/powershell:nanoserver-ltsc2022 AS git
+SHELL ["pwsh", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
 # Download and install Git Portable + Git LFS in single optimized layer
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; `
