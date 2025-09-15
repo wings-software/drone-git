@@ -22,6 +22,8 @@ RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tl
     # Extract Git LFS
     Write-Host 'Extracting Git LFS...'; `
     Expand-Archive -Path 'git-lfs.zip' -DestinationPath 'git-lfs-temp'; `
+    # Ensure git cmd directory exists
+    if (-not (Test-Path 'C:\git\cmd')) { New-Item -ItemType Directory -Path 'C:\git\cmd' -Force }; `
     # Find the actual git-lfs.exe file (structure may vary)
     $lfsExe = Get-ChildItem -Path 'git-lfs-temp' -Name 'git-lfs.exe' -Recurse | Select-Object -First 1; `
     if ($lfsExe) { Copy-Item "git-lfs-temp\$lfsExe" 'C:\git\cmd\git-lfs.exe' } else { Write-Host 'Warning: git-lfs.exe not found in expected location' }; `
