@@ -50,12 +50,12 @@ COPY --from=git /git /git
 # Add drone-git scripts
 ADD windows/* /bin/
 
-# Configure environment in single layer
+# Configure environment using ENV directive (avoids registry permission issues)
+ENV PATH="C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;${PATH}"
+
+# Verify git works in final image
 SHELL ["pwsh", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
-RUN $newPath = $env:PATH + ';C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin'; `
-    [Environment]::SetEnvironmentVariable('PATH', $newPath, [EnvironmentVariableTarget]::Machine); `
-    # Verify git works in final image
-    Write-Host 'Final verification...'; `
+RUN Write-Host 'Final verification...'; `
     git --version; `
     git-lfs version
 
