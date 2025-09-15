@@ -7,6 +7,9 @@ SHELL ["pwsh", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference
 
 # Download and install Git Portable + Git LFS in single optimized layer
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; `
+    # Create temp directory and work from there
+    $tempDir = New-Item -ItemType Directory -Path 'C:\temp' -Force; `
+    Set-Location $tempDir; `
     # Download Git Portable (more optimized than MinGit for containers)
     Write-Host 'Downloading Git Portable...'; `
     Invoke-WebRequest -UseBasicParsing 'https://github.com/git-for-windows/git/releases/download/v2.39.2.windows.1/PortableGit-2.39.2-64-bit.7z.exe' -OutFile 'git-portable.exe'; `
@@ -15,15 +18,15 @@ RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tl
     Invoke-WebRequest -UseBasicParsing 'https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-windows-amd64-v3.7.0.zip' -OutFile 'git-lfs.zip'; `
     # Extract Git Portable (self-extracting)
     Write-Host 'Extracting Git...'; `
-    Start-Process -Wait -FilePath './git-portable.exe' -ArgumentList '-y', '-InstallPath=C:\git'; `
+    Start-Process -Wait -FilePath '.\git-portable.exe' -ArgumentList '-y', '-InstallPath=C:\git'; `
     # Extract Git LFS
     Write-Host 'Extracting Git LFS...'; `
-    Expand-Archive -Path 'git-lfs.zip' -DestinationPath 'C:\git-lfs-temp'; `
-    Move-Item 'C:\git-lfs-temp\git-lfs-3.7.0\git-lfs.exe' 'C:\git\cmd\git-lfs.exe'; `
+    Expand-Archive -Path 'git-lfs.zip' -DestinationPath 'git-lfs-temp'; `
+    Move-Item 'git-lfs-temp\git-lfs-3.7.0\git-lfs.exe' 'C:\git\cmd\git-lfs.exe'; `
     # Cleanup downloads and temporary files to reduce layer size
     Write-Host 'Cleaning up...'; `
-    Remove-Item -Force 'git-portable.exe', 'git-lfs.zip'; `
-    Remove-Item -Recurse -Force 'C:\git-lfs-temp'; `
+    Set-Location 'C:\'; `
+    Remove-Item -Recurse -Force 'C:\temp'; `
     # Remove unnecessary Git components for container use
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 'C:\git\usr\share\doc'; `
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 'C:\git\usr\share\info'; `
