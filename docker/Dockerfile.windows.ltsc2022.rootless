@@ -10,15 +10,15 @@ RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tl
     # Create temp directory and work from there
     $tempDir = New-Item -ItemType Directory -Path 'C:\temp' -Force; `
     Set-Location $tempDir; `
-    # Download Git Portable (more optimized than MinGit for containers)
-    Write-Host 'Downloading Git Portable...'; `
-    Invoke-WebRequest -UseBasicParsing 'https://github.com/git-for-windows/git/releases/download/v2.39.2.windows.1/PortableGit-2.39.2-64-bit.7z.exe' -OutFile 'git-portable.exe'; `
+    # Download MinGit (reliable for containers)
+    Write-Host 'Downloading MinGit...'; `
+    Invoke-WebRequest -UseBasicParsing 'https://github.com/git-for-windows/git/releases/download/v2.39.2.windows.1/MinGit-2.39.2-64-bit.zip' -OutFile 'git.zip'; `
     # Download Git LFS
     Write-Host 'Downloading Git LFS...'; `
     Invoke-WebRequest -UseBasicParsing 'https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-windows-amd64-v3.7.0.zip' -OutFile 'git-lfs.zip'; `
-    # Extract Git Portable (self-extracting)
+    # Extract MinGit
     Write-Host 'Extracting Git...'; `
-    Start-Process -Wait -FilePath '.\git-portable.exe' -ArgumentList '-y', '-InstallPath=C:\git'; `
+    Expand-Archive -Path 'git.zip' -DestinationPath 'C:\git'; `
     # Extract Git LFS
     Write-Host 'Extracting Git LFS...'; `
     Expand-Archive -Path 'git-lfs.zip' -DestinationPath 'git-lfs-temp'; `
