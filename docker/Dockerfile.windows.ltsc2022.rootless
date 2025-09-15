@@ -50,14 +50,17 @@ COPY --from=git /git /git
 # Add drone-git scripts
 ADD windows/* /bin/
 
-# Configure environment using ENV directive (avoids registry permission issues)
-ENV PATH="C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;${PATH}"
-
-# Verify git works in final image
+# Verify git works in final image and configure PATH
 SHELL ["pwsh", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
-RUN Write-Host 'Final verification...'; `
-    git --version; `
-    git-lfs version
+RUN Write-Host 'Checking git installation...'; `
+    Get-ChildItem -Path 'C:\git' -Recurse -Name '*.exe' | Where-Object { $_ -like '*git*' } | Select-Object -First 5; `
+    # Test git directly with full path first
+    & 'C:\git\cmd\git.exe' --version; `
+    & 'C:\git\cmd\git-lfs.exe' version; `
+    Write-Host 'Git verification successful'
+
+# Configure PATH using ENV directive  
+ENV PATH="C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\Program Files\PowerShell;${PATH}"
 
 # Run as non-privileged user for rootless operation
 USER ContainerUser
