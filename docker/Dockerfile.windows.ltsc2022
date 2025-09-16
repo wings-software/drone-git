@@ -1,31 +1,65 @@
 # escape=`
 
-FROM mcr.microsoft.com/windows/servercore:ltsc2022 AS git
-SHELL ["powershell.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+FROM mcr.microsoft.com/powershell:nanoserver-ltsc2022 AS git
+SHELL ["pwsh", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
-RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
-    Invoke-WebRequest -UseBasicParsing https://github.com/git-for-windows/git/releases/download/v2.39.2.windows.1/MinGit-2.39.2-64-bit.zip -OutFile git.zip; `
-    Expand-Archive git.zip -DestinationPath C:\git;
+# Download and install Git Portable + Git LFS in single optimized layer
+RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; `
+    # Create temp directory and work from there
+    $tempDir = New-Item -ItemType Directory -Path 'C:\temp' -Force; `
+    Set-Location $tempDir; `
+    # Download MinGit (reliable for containers)
+    Write-Host 'Downloading MinGit...'; `
+    Invoke-WebRequest -UseBasicParsing 'https://github.com/git-for-windows/git/releases/download/v2.39.2.windows.1/MinGit-2.39.2-64-bit.zip' -OutFile 'git.zip'; `
+    # Download Git LFS
+    Write-Host 'Downloading Git LFS...'; `
+    Invoke-WebRequest -UseBasicParsing 'https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-windows-amd64-v3.7.0.zip' -OutFile 'git-lfs.zip'; `
+    # Extract MinGit
+    Write-Host 'Extracting Git...'; `
+    Expand-Archive -Path 'git.zip' -DestinationPath 'C:\git'; `
+    # Extract Git LFS
+    Write-Host 'Extracting Git LFS...'; `
+    Expand-Archive -Path 'git-lfs.zip' -DestinationPath 'git-lfs-temp'; `
+    # Ensure git cmd directory exists
+    if (-not (Test-Path 'C:\git\cmd')) { New-Item -ItemType Directory -Path 'C:\git\cmd' -Force }; `
+    # Find the actual git-lfs.exe file (structure may vary)
+    $lfsExe = Get-ChildItem -Path 'git-lfs-temp' -Name 'git-lfs.exe' -Recurse | Select-Object -First 1; `
+    if ($lfsExe) { Copy-Item "git-lfs-temp\$lfsExe" 'C:\git\cmd\git-lfs.exe' } else { Write-Host 'Warning: git-lfs.exe not found in expected location' }; `
+    # Cleanup downloads and temporary files to reduce layer size
+    Write-Host 'Cleaning up...'; `
+    Set-Location 'C:\'; `
+    Remove-Item -Recurse -Force 'C:\temp'; `
+    # Remove unnecessary Git components for container use
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 'C:\git\usr\share\doc'; `
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 'C:\git\usr\share\info'; `
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 'C:\git\usr\share\man'; `
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 'C:\git\usr\share\locale'; `
+    # Verify installation
+    Write-Host 'Verifying Git installation...'; `
+    & 'C:\git\cmd\git.exe' --version; `
+    & 'C:\git\cmd\git-lfs.exe' version
 
-# Download and extract Git LFS
-RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
-    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-windows-amd64-v3.7.0.zip -OutFile git-lfs.zip; `
-    Expand-Archive git-lfs.zip -DestinationPath C:\git-lfs;
+# Use PowerShell Nano Server as final base (much smaller than windowsservercore)
+FROM mcr.microsoft.com/powershell:nanoserver-ltsc2022
 
-RUN Add-WindowsCapability -Online -Name OpenSSH.Client*
-
-
-FROM mcr.microsoft.com/powershell:windowsservercore-ltsc2022
+# Copy optimized git installation
 COPY --from=git /git /git
-COPY --from=git /git-lfs /git-lfs
 
-COPY --from=git C:\Windows\System32\OpenSSH\ /openssh
-
+# Add drone-git scripts
 ADD windows/* /bin/
 
-# https://github.com/PowerShell/PowerShell/issues/6211#issuecomment-367477137
-USER ContainerAdministrator
-RUN setx /M PATH "%PATH%;C:\Program Files\PowerShell;C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;C:\git-lfs\git-lfs-3.7.0"
-
+# Verify git works in final image and configure PATH
 SHELL ["pwsh", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+RUN Write-Host 'Checking git installation...'; `
+    Get-ChildItem -Path 'C:\git' -Recurse -Name '*.exe' | Where-Object { $_ -like '*git*' } | Select-Object -First 5; `
+    # Test git directly with full path first
+    & 'C:\git\cmd\git.exe' --version; `
+    & 'C:\git\cmd\git-lfs.exe' version; `
+    Write-Host 'Git verification successful'
+
+# Configure PATH using ENV directive  
+ENV PATH="C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\Program Files\PowerShell;${PATH}"
+
+# Set working directory and default command
+WORKDIR /
 CMD [ "pwsh", "C:\\bin\\clone.ps1" ]
