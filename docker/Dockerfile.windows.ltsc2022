@@ -1,7 +1,8 @@
 # escape=`
 
-FROM mcr.microsoft.com/powershell:nanoserver-ltsc2022 AS git
-SHELL ["pwsh", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+# Use windowsservercore for building stage (needed for OpenSSH installation)
+FROM mcr.microsoft.com/windows/servercore:ltsc2022 AS git
+SHELL ["powershell.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
 # Download and install Git Portable + Git LFS in single optimized layer
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; `
@@ -39,11 +40,15 @@ RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tl
     & 'C:\git\cmd\git.exe' --version; `
     & 'C:\git\cmd\git-lfs.exe' version
 
+# Install OpenSSH client (required for SSH git operations)
+RUN Add-WindowsCapability -Online -Name OpenSSH.Client*
+
 # Use PowerShell Nano Server as final base (much smaller than windowsservercore)
 FROM mcr.microsoft.com/powershell:nanoserver-ltsc2022
 
-# Copy optimized git installation
+# Copy optimized git installation and OpenSSH
 COPY --from=git /git /git
+COPY --from=git C:\\Windows\\System32\\OpenSSH\\ /openssh
 
 # Add drone-git scripts
 ADD windows/* /bin/
@@ -55,10 +60,12 @@ RUN Write-Host 'Checking git installation...'; `
     # Test git directly with full path first
     & 'C:\git\cmd\git.exe' --version; `
     & 'C:\git\cmd\git-lfs.exe' version; `
-    Write-Host 'Git verification successful'
+    # Test SSH client
+    if (Test-Path 'C:\openssh\ssh.exe') { & 'C:\openssh\ssh.exe' -V } else { Write-Warning 'SSH client not found' }; `
+    Write-Host 'Git and SSH verification successful'
 
-# Configure PATH using ENV directive  
-ENV PATH="C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\Program Files\PowerShell;${PATH}"
+# Configure PATH using ENV directive (including OpenSSH)
+ENV PATH="C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;C:\Program Files\PowerShell;${PATH}"
 
 # Set working directory and default command
 WORKDIR /
