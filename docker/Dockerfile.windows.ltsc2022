@@ -41,14 +41,23 @@ RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tl
     & 'C:\git\cmd\git-lfs.exe' version
 
 # Install OpenSSH client (required for SSH git operations)
-RUN Add-WindowsCapability -Online -Name OpenSSH.Client*
+RUN Add-WindowsCapability -Online -Name OpenSSH.Client*; `
+    # Verify OpenSSH installation and copy to accessible location
+    if (Test-Path 'C:\Windows\System32\OpenSSH\ssh.exe') { `
+        Write-Host 'OpenSSH installed successfully'; `
+        New-Item -ItemType Directory -Path 'C:\openssh' -Force; `
+        Copy-Item -Path 'C:\Windows\System32\OpenSSH\*' -Destination 'C:\openssh\' -Recurse -Force; `
+        Get-ChildItem 'C:\openssh' | Select-Object Name, Length; `
+    } else { `
+        Write-Error 'OpenSSH installation failed'; `
+    }
 
 # Use PowerShell Nano Server as final base (much smaller than windowsservercore)
 FROM mcr.microsoft.com/powershell:nanoserver-ltsc2022
 
 # Copy optimized git installation and OpenSSH
 COPY --from=git /git /git
-COPY --from=git C:\\Windows\\System32\\OpenSSH\\ /openssh
+COPY --from=git /openssh /openssh
 
 # Add drone-git scripts
 ADD windows/* /bin/

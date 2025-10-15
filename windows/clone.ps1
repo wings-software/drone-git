@@ -33,16 +33,27 @@ if ($Env:DRONE_PERSIST_CREDS) {
 }
 
 if ($Env:DRONE_SSH_KEY) {
-    mkdir C:\.ssh  -Force
-    echo $Env:DRONE_SSH_KEY > C:\.ssh\id_rsa
-
-    # $Env:SSH_KEYSCAN_FLAGS=""
-    # if ($Env:DRONE_NETRC_PORT) {
-    # 	$Env:SSH_KEYSCAN_FLAGS="-p ${Env:DRONE_NETRC_PORT}"
-    # }
-    # ssh-keyscan -H $Env:SSH_KEYSCAN_FLAGS $Env:DRONE_NETRC_MACHINE >  C:\\.ssh\\known_hosts
-
-    $Env:GIT_SSH_COMMAND="ssh -i C:/.ssh/id_rsa ${Env:SSH_KEYSCAN_FLAGS} -o StrictHostKeyChecking=no"
+    # Create .ssh directory in user profile (Windows standard location)
+    $sshDir = Join-Path $Env:USERPROFILE '.ssh'
+    New-Item -ItemType Directory -Path $sshDir -Force | Out-Null
+    
+    # Write SSH key with proper line endings
+    $keyPath = Join-Path $sshDir 'id_rsa'
+    $Env:DRONE_SSH_KEY | Out-File -FilePath $keyPath -Encoding ascii -NoNewline
+    
+    # Set proper permissions for SSH key (Windows equivalent of chmod 600)
+    $acl = Get-Acl $keyPath
+    $acl.SetAccessRuleProtection($true, $false)  # Remove inheritance
+    $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+        [System.Security.Principal.WindowsIdentity]::GetCurrent().Name,
+        'FullControl',
+        'Allow'
+    )
+    $acl.SetAccessRule($accessRule)
+    Set-Acl -Path $keyPath -AclObject $acl
+    
+    # Set GIT_SSH_COMMAND with proper Windows path format
+    $Env:GIT_SSH_COMMAND="ssh -i `"$keyPath`" -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL"
 }
 
 # configure git global behavior and parameters via the
