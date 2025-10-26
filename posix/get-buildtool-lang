@@ -9,25 +9,48 @@ detect_languages() {
     detected_langs=""
 
     # Get all file extensions in the repository
-    files=$(find "$repo_path" -type f -maxdepth 7 -not -path '*/\.*' 2>/dev/null | sed -E 's/.*\.(.*)$/\1/' | sort | uniq)
+    # Exclude common dependency and build directories to avoid false positives
+    files=$(find "$repo_path" -type f -maxdepth 15 \
+        -not -path '*/\.*' \
+        -not -path '*/node_modules/*' \
+        -not -path '*/target/*' \
+        -not -path '*/build/*' \
+        -not -path '*/vendor/*' \
+        -not -path '*/dist/*' \
+        -not -path '*/out/*' \
+        -not -path '*/bin/*' \
+        -not -path '*/.gradle/*' \
+        -not -path '*/.m2/*' \
+        -not -path '*/venv/*' \
+        -not -path '*/__pycache__/*' \
+        -not -path '*/site-packages/*' \
+        2>/dev/null | sed -E 's/.*\.(.*)$/\1/' | sort | uniq)
 
-    # Process the langs variable without subshells
-    lang_exts=$(echo "$langs" | tr ',' '\n')
-    for lang_ext in $lang_exts; do
+    # Iterate through language definitions and check if their extensions exist
+    seen_langs=""
+    IFS=','
+    for lang_ext in $langs; do
         # Split the language and extension by the colon ':'
         lang=$(echo "$lang_ext" | cut -d: -f1)
         ext=$(echo "$lang_ext" | cut -d: -f2)
 
         # Check if the extension is in the list of file extensions found in the repo
         if echo "$files" | grep -qw "$ext"; then
-            # Add the language to the detected languages list
-            if [ -z "$detected_langs" ]; then
-                detected_langs="$lang"
-            else
-                detected_langs="$detected_langs,$lang"
-            fi
+            # Only add if not already seen (avoid duplicates)
+            case ",$seen_langs," in
+                *",$lang,"*) ;;  # Already added, skip
+                *)
+                    if [ -z "$detected_langs" ]; then
+                        detected_langs="$lang"
+                    else
+                        detected_langs="$detected_langs,$lang"
+                    fi
+                    seen_langs="$seen_langs,$lang"
+                    ;;
+            esac
         fi
     done
+    unset IFS
 
     # Output the detected languages
     echo "$detected_langs"
