@@ -19,6 +19,15 @@ if [ "$DRONE_NETRC_DEBUG" = "true" ]; then
   export LFS_DEBUG_HTTP=true
 fi
 
+# Set git config scope based on isolation mode
+if [ -n "$HARNESS_GIT_CONFIG_FOLDER" ]; then
+  GIT_CONFIG_SCOPE="--local"
+  echo "[DEBUG] Using git config --local (isolated mode)"
+else
+  GIT_CONFIG_SCOPE="--global"
+  echo "[DEBUG] Using git config --global (global mode)"
+fi
+
 if [ ! -d .git ]; then
   set -x
   git init
@@ -40,7 +49,7 @@ fi
 
 if [ "$HARNESS_GIT_PROXY" = "true" ] && [ -n "$HARNESS_HTTPS_PROXY" ]; then
   set -x
-  git config --global http.proxy "$HARNESS_HTTPS_PROXY"
+  git config ${GIT_CONFIG_SCOPE} http.proxy "$HARNESS_HTTPS_PROXY"
   set +x
 fi
 

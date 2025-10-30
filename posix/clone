@@ -8,17 +8,33 @@ if [ "$PLUGIN_ONLY_COPY_FILE_CONTENT" = "true" ]; then
 	exit 0
 fi
 
-# force the home directory path.
-if [ "$HOME" != "/home/drone" ]; then
-	if [ -d "/home/drone" ]; then
-		echo "[DEBUG] setting default home directory"
-		export HOME=/home/drone
-	fi
-fi
-
 if [ ! -z "${DRONE_WORKSPACE}" ]; then
 	mkdir -p ${DRONE_WORKSPACE}
 	cd ${DRONE_WORKSPACE}
+fi
+
+# Check if isolation mode is enabled
+if [ -n "$HARNESS_GIT_CONFIG_FOLDER" ]; then
+	# Create isolated local directory for credentials and configs
+	# This allows parallel execution without conflicts
+	mkdir -p "${HARNESS_GIT_CONFIG_FOLDER}"
+	chmod 700 "${HARNESS_GIT_CONFIG_FOLDER}"
+	# Export isolated HOME for git credential operations
+	# Git will look for .netrc and .ssh in this location
+	export HOME="${HARNESS_GIT_CONFIG_FOLDER}"
+	export GIT_CONFIG_GLOBAL="${HARNESS_GIT_CONFIG_FOLDER}/.gitconfig"
+	touch "${GIT_CONFIG_GLOBAL}"
+	chmod 600 "${GIT_CONFIG_GLOBAL}"
+	echo "[INFO] Running in isolated mode - credentials will be stored in ${HARNESS_GIT_CONFIG_FOLDER}"
+else
+	# Original behavior: use global HOME directory
+	# force the home directory path.
+	if [ "$HOME" != "/home/drone" ]; then
+		if [ -d "/home/drone" ]; then
+			echo "[DEBUG] setting default home directory"
+			export HOME=/home/drone
+		fi
+	fi
 fi
 
 # if the netrc enviornment variables exist, write
@@ -66,6 +82,13 @@ fi
 # Refer: https://docs.aws.amazon.com/codecommit/latest/userguide/setting-up-https-unixes.html
 
 if [ ! -z "$DRONE_AWS_ACCESS_KEY" ]; then
+	if [ -n "$HARNESS_GIT_CONFIG_FOLDER" ]; then
+		mkdir -p "${HARNESS_GIT_CONFIG_FOLDER}/.aws"
+		chmod 700 "${HARNESS_GIT_CONFIG_FOLDER}/.aws"
+		# Set AWS config to use local directory
+		export AWS_CONFIG_FILE="${HARNESS_GIT_CONFIG_FOLDER}/.aws/config"
+		export AWS_SHARED_CREDENTIALS_FILE="${HARNESS_GIT_CONFIG_FOLDER}/.aws/credentials"
+	fi
 	aws configure set aws_access_key_id $DRONE_AWS_ACCESS_KEY
 	aws configure set aws_secret_access_key $DRONE_AWS_SECRET_KEY
 	aws configure set default.region $DRONE_AWS_REGION

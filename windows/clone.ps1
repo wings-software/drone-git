@@ -10,6 +10,22 @@ if ($Env:DRONE_WORKSPACE) {
     cd $Env:DRONE_WORKSPACE
 }
 
+# Check if isolation mode is enabled
+if ($Env:HARNESS_GIT_CONFIG_FOLDER) {
+    # Create isolated local directory for credentials and configs
+    # This allows parallel execution without conflicts
+    New-Item -ItemType Directory -Force -Path $Env:HARNESS_GIT_CONFIG_FOLDER | Out-Null
+
+    # Export isolated USERPROFILE and HOME for git credential operations
+    # Git will look for _netrc and .ssh in this location
+    $Env:USERPROFILE = $Env:HARNESS_GIT_CONFIG_FOLDER
+    $Env:HOME = $Env:HARNESS_GIT_CONFIG_FOLDER
+    $Env:GIT_CONFIG_GLOBAL = Join-Path $Env:HARNESS_GIT_CONFIG_FOLDER ".gitconfig"
+    New-Item -ItemType File -Force -Path $Env:GIT_CONFIG_GLOBAL | Out-Null
+
+    Write-Host "[INFO] Running in isolated mode - credentials will be stored in $Env:HARNESS_GIT_CONFIG_FOLDER"
+}
+
 # if the netrc enviornment variables exist, write
 # the netrc file.
 
@@ -33,16 +49,19 @@ if ($Env:DRONE_PERSIST_CREDS) {
 }
 
 if ($Env:DRONE_SSH_KEY) {
-    mkdir C:\.ssh  -Force
-    echo $Env:DRONE_SSH_KEY > C:\.ssh\id_rsa
+    $SSH_DIR = Join-Path $Env:USERPROFILE ".ssh"
+    $SSH_KEY_PATH = Join-Path $SSH_DIR "id_rsa"
+
+    mkdir $SSH_DIR -Force
+    echo $Env:DRONE_SSH_KEY > $SSH_KEY_PATH
 
     # $Env:SSH_KEYSCAN_FLAGS=""
     # if ($Env:DRONE_NETRC_PORT) {
     # 	$Env:SSH_KEYSCAN_FLAGS="-p ${Env:DRONE_NETRC_PORT}"
     # }
-    # ssh-keyscan -H $Env:SSH_KEYSCAN_FLAGS $Env:DRONE_NETRC_MACHINE >  C:\\.ssh\\known_hosts
+    # ssh-keyscan -H $Env:SSH_KEYSCAN_FLAGS $Env:DRONE_NETRC_MACHINE >  (Join-Path $SSH_DIR "known_hosts")
 
-    $Env:GIT_SSH_COMMAND="ssh -i C:/.ssh/id_rsa ${Env:SSH_KEYSCAN_FLAGS} -o StrictHostKeyChecking=no"
+    $Env:GIT_SSH_COMMAND="ssh -i $SSH_KEY_PATH ${Env:SSH_KEYSCAN_FLAGS} -o StrictHostKeyChecking=no"
 }
 
 # configure git global behavior and parameters via the

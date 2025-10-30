@@ -28,6 +28,15 @@ if ($Env:DRONE_NETRC_DEBUG) {
     $Env:LFS_DEBUG_HTTP = "true"
 }
 
+# Set git config scope based on isolation mode
+if ($Env:HARNESS_GIT_CONFIG_FOLDER) {
+    $GIT_CONFIG_SCOPE = "--local"
+    Write-Host "[DEBUG] Using git config --local (isolated mode)"
+} else {
+    $GIT_CONFIG_SCOPE = "--global"
+    Write-Host "[DEBUG] Using git config --global (global mode)"
+}
+
 if (!(Test-Path .git)) {
     Write-Host '+ git init';
     iu git init
@@ -51,8 +60,8 @@ if ($env:DRONE_NETRC_LFS_ENABLED -eq "true") {
 
 
 if ($env:HARNESS_GIT_PROXY -eq "true" -and -not [string]::IsNullOrEmpty($env:HARNESS_HTTPS_PROXY)) {
-    Write-Host "+ git config --global http.proxy $env:HARNESS_HTTPS_PROXY"
-    iu git config --global http.proxy $env:HARNESS_HTTPS_PROXY
+    Write-Host "+ git config $GIT_CONFIG_SCOPE http.proxy $env:HARNESS_HTTPS_PROXY"
+    iu git config $GIT_CONFIG_SCOPE http.proxy $env:HARNESS_HTTPS_PROXY
 }
 
 if ($env:DRONE_NETRC_FETCH_TAGS -eq "true") {
