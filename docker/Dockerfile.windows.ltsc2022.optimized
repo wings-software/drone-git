@@ -1,60 +1,44 @@
 # escape=`
 
-# Use Server Core only for building tools, then switch to Nano Server
-FROM mcr.microsoft.com/windows/servercore:ltsc2022 AS builder
+# Build stage - same as original but with cleanup
+FROM mcr.microsoft.com/windows/servercore:ltsc2022 AS git
 SHELL ["powershell.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
-# Download and heavily optimize Git installation
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
-    Write-Host 'Downloading MinGit...'; `
     Invoke-WebRequest -UseBasicParsing https://github.com/git-for-windows/git/releases/download/v2.39.2.windows.1/MinGit-2.39.2-64-bit.zip -OutFile git.zip; `
-    Expand-Archive git.zip -DestinationPath C:\git-full; `
-    Write-Host 'Creating minimal Git distribution...'; `
-    New-Item -Path C:\git-minimal -ItemType Directory; `
-    New-Item -Path C:\git-minimal\cmd -ItemType Directory; `
-    New-Item -Path C:\git-minimal\bin -ItemType Directory; `
-    New-Item -Path C:\git-minimal\mingw64 -ItemType Directory; `
-    New-Item -Path C:\git-minimal\mingw64\bin -ItemType Directory; `
-    New-Item -Path C:\git-minimal\mingw64\libexec -ItemType Directory; `
-    New-Item -Path C:\git-minimal\mingw64\libexec\git-core -ItemType Directory; `
-    Copy-Item C:\git-full\cmd\git.exe C:\git-minimal\cmd\; `
-    Copy-Item C:\git-full\mingw64\bin\git.exe C:\git-minimal\mingw64\bin\; `
-    Copy-Item C:\git-full\mingw64\libexec\git-core\*.exe C:\git-minimal\mingw64\libexec\git-core\; `
-    Copy-Item C:\git-full\mingw64\libexec\git-core\*.dll C:\git-minimal\mingw64\libexec\git-core\; `
-    Write-Host 'Installing Git LFS minimally...'; `
-    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-windows-amd64-v3.7.0.zip -OutFile git-lfs.zip; `
-    Expand-Archive git-lfs.zip -DestinationPath C:\git-lfs-full; `
-    Copy-Item C:\git-lfs-full\git-lfs-3.7.0\git-lfs.exe C:\git-minimal\cmd\; `
-    Write-Host 'Installing PowerShell Core (minimal)...'; `
-    Invoke-WebRequest -UseBasicParsing https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.zip -OutFile ps.zip; `
-    Expand-Archive ps.zip -DestinationPath C:\ps-full; `
-    New-Item -Path C:\ps-minimal -ItemType Directory; `
-    Copy-Item C:\ps-full\pwsh.exe C:\ps-minimal\; `
-    Copy-Item C:\ps-full\*.dll C:\ps-minimal\; `
-    Write-Host 'Adding OpenSSH (minimal)...'; `
-    Add-WindowsCapability -Online -Name OpenSSH.Client*; `
-    New-Item -Path C:\ssh-minimal -ItemType Directory; `
-    Copy-Item C:\Windows\System32\OpenSSH\ssh.exe C:\ssh-minimal\; `
-    Copy-Item C:\Windows\System32\OpenSSH\ssh-agent.exe C:\ssh-minimal\; `
-    Copy-Item C:\Windows\System32\OpenSSH\ssh-keygen.exe C:\ssh-minimal\; `
-    Write-Host 'Cleanup...'; `
-    Remove-Item -Recurse -Force C:\git-full, C:\git-lfs-full, C:\ps-full; `
-    Remove-Item -Force git.zip, git-lfs.zip, ps.zip
+    Expand-Archive git.zip -DestinationPath C:\git; `
+    Remove-Item git.zip -Force
 
-# Ultra-minimal final stage using Nano Server
+# Download and extract Git LFS
+RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
+    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-windows-amd64-v3.7.0.zip -OutFile git-lfs.zip; `
+    Expand-Archive git-lfs.zip -DestinationPath C:\git-lfs; `
+    Remove-Item git-lfs.zip -Force
+
+RUN Add-WindowsCapability -Online -Name OpenSSH.Client*
+
+# PowerShell stage - download PowerShell Core manually to avoid heavy base image
+FROM mcr.microsoft.com/windows/servercore:ltsc2022 AS powershell
+SHELL ["powershell.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
+    Invoke-WebRequest -UseBasicParsing https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.zip -OutFile powershell.zip; `
+    Expand-Archive powershell.zip -DestinationPath C:\PowerShell; `
+    Remove-Item powershell.zip -Force
+
+# Final stage - Use Nano Server instead of Server Core (main optimization)
 FROM mcr.microsoft.com/windows/nanoserver:ltsc2022
 
-# Copy minimal tools from builder
-COPY --from=builder C:\git-minimal C:\git
-COPY --from=builder C:\ps-minimal C:\ps
-COPY --from=builder C:\ssh-minimal C:\ssh
+# Copy tools from build stages (same as original)
+COPY --from=git /git /git
+COPY --from=git /git-lfs /git-lfs
+COPY --from=git C:\Windows\System32\OpenSSH\ /openssh
+COPY --from=powershell /PowerShell /PowerShell
 
 # Copy PowerShell scripts
-COPY windows C:\bin
+ADD windows/* /bin/
 
-# Set environment for minimal tools
-ENV PATH="C:\ps;C:\git\cmd;C:\git\mingw64\bin;C:\git\mingw64\libexec\git-core;C:\ssh;${PATH}"
+# Set PATH (same as original)
+ENV PATH="C:\PowerShell;C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;C:\git-lfs\git-lfs-3.7.0;${PATH}"
 
-# Use PowerShell Core as shell
-SHELL ["C:\\ps\\pwsh.exe", "-Command", "$ErrorActionPreference = 'Stop';"]
-CMD ["C:\\ps\\pwsh.exe", "C:\\bin\\clone.ps1"]
+SHELL ["C:\\PowerShell\\pwsh.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+CMD [ "C:\\PowerShell\\pwsh.exe", "C:\\bin\\clone.ps1" ]
