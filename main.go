@@ -169,14 +169,14 @@ func collectCodeMetrics(workdir string) (*CodeMetrics, error) {
 	slog.Info("Collecting code metrics using scc library", "directory", workdir)
 
 	// Set up timeout for analysis
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	// Configure scc processor with optimizations
 	processor.DirFilePaths = []string{workdir}
 	processor.Format = "json"
-	processor.Files = false
-	processor.Complexity = true  // Enable complexity calculations
+	processor.Files = true
+	processor.Complexity = false // Enable complexity calculations
 	processor.Cocomo = false     // Disable COCOMO calculations for speed
 	processor.Size = false       // Disable size calculations for speed
 	processor.Duplicates = false // Disable duplicate detection for speed
@@ -187,7 +187,8 @@ func collectCodeMetrics(workdir string) (*CodeMetrics, error) {
 		"__pycache__", ".gradle", ".m2", "coverage", "dist",
 		".svn", ".hg", "bin", "obj", "Debug", "Release",
 	}
-	processor.GitIgnore = true         // Respect .gitignore files
+	processor.GitIgnore = true
+	processor.NoLarge = true
 	processor.LargeByteCount = 1000000 // Skip files > 1MB
 	processor.LargeLineCount = 40000   // Skip files > 40k lines
 
