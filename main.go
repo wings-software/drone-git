@@ -54,7 +54,6 @@ type BuildToolData struct {
 	// New telemetry fields
 	Timestamp     string      `json:"timestamp"`
 	Repository    string      `json:"repository,omitempty"`
-	RepositoryURL string      `json:"repository_url,omitempty"`
 	Branch        string      `json:"branch,omitempty"`
 	Commit        string      `json:"commit,omitempty"`
 	BuildNumber   string      `json:"build_number,omitempty"`
@@ -352,28 +351,18 @@ func collectAndWriteMetrics(workdir string) {
 		return
 	}
 
-	// Collect code metrics using scc library
-	metrics, err := collectCodeMetrics(workdir)
-	if err != nil {
-		slog.Warn("Failed to collect code metrics", "error", err)
-		// Continue with empty metrics rather than failing
-		metrics = &CodeMetrics{
-			Lines:      0,
-			Code:       0,
-			Comments:   0,
-			Blanks:     0,
-			Complexity: 0,
-			Files:      0,
-			Languages:  make(map[string]LanguageMetrics),
-		}
+	// Respect CI_DISABLE_TELEMETRY flag - disables everything (same as original script condition)
+	if os.Getenv("CI_DISABLE_TELEMETRY") != "" {
+		slog.Debug("All telemetry disabled via CI_DISABLE_TELEMETRY, skipping collection")
+		return
 	}
 
-	// Execute existing build tool script first
+	// Always execute build tool script first (basic harness_lang, harness_build_tool data)
 	if err := executeBuildToolScript(workdir); err != nil {
 		slog.Warn("Build tool script failed, continuing with empty values", "error", err)
 	}
 
-	// Read the output from the script
+	// Read the build tool script output
 	existingData := make(map[string]interface{})
 	if data, err := os.ReadFile(buildToolFile); err == nil {
 		if err := json.Unmarshal(data, &existingData); err != nil {
@@ -385,23 +374,53 @@ func collectAndWriteMetrics(workdir string) {
 	harnessLang, _ := existingData["harness_lang"].(string)
 	harnessBuildTool, _ := existingData["harness_build_tool"].(string)
 
-	// Prepare complete build tool data
+	// Collect SCC metrics only if not specifically disabled
+	var metrics *CodeMetrics
+	if os.Getenv("DISABLE_SCC_METRICS") != "" {
+		slog.Debug("SCC metrics disabled via DISABLE_SCC_METRICS, using empty metrics")
+		metrics = &CodeMetrics{
+			Lines:      0,
+			Code:       0,
+			Comments:   0,
+			Blanks:     0,
+			Complexity: 0,
+			Files:      0,
+			Languages:  make(map[string]LanguageMetrics),
+		}
+	} else {
+		var err error
+		metrics, err = collectCodeMetrics(workdir)
+		if err != nil {
+			slog.Warn("Failed to collect SCC metrics", "error", err)
+			// Use empty metrics if scc fails
+			metrics = &CodeMetrics{
+				Lines:      0,
+				Code:       0,
+				Comments:   0,
+				Blanks:     0,
+				Complexity: 0,
+				Files:      0,
+				Languages:  make(map[string]LanguageMetrics),
+			}
+		}
+	}
+
+	// Prepare complete build tool data (always includes build tool info)
 	buildToolData := &BuildToolData{
-		// Existing fields (compatibility with get-buildtool-lang)
+		// Always include build tool fields (ensures backward compatibility)
 		HarnessLang:      harnessLang,
 		HarnessBuildTool: harnessBuildTool,
 
-		// New telemetry fields
-		Timestamp:     time.Now().UTC().Format(time.RFC3339),
-		Repository:    os.Getenv("DRONE_REPO"),
-		RepositoryURL: getRepositoryURL(),
-		Branch:        os.Getenv("DRONE_BRANCH"),
-		Commit:        os.Getenv("DRONE_COMMIT"),
-		BuildNumber:   os.Getenv("DRONE_BUILD_NUMBER"),
-		Metrics:       *metrics,
+		// Context fields (only if not fully disabled)
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
+		Repository:  getRepositoryURL(),
+		Branch:      os.Getenv("DRONE_BRANCH"),
+		Commit:      os.Getenv("DRONE_COMMIT"),
+		BuildNumber: os.Getenv("DRONE_BUILD_NUMBER"),
+		Metrics:     *metrics,
 	}
 
-	// Write complete file once
+	// Always write the file (ensures build tool data flows through)
 	if err := writeBuildToolFile(buildToolData); err != nil {
 		slog.Error("Failed to write build tool file", "error", err)
 	}

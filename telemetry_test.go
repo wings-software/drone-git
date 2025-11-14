@@ -88,6 +88,88 @@ func TestCollectAndWriteMetrics_NoFile(t *testing.T) {
 	collectAndWriteMetrics(tmpDir)
 }
 
+func TestCollectAndWriteMetrics_TelemetryDisabled(t *testing.T) {
+	// Set up build tool file but disable telemetry
+	tmpDir, err := os.MkdirTemp("", "drone-git-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	buildToolFile := filepath.Join(tmpDir, "build-tool-info.json")
+	os.Setenv("PLUGIN_BUILD_TOOL_FILE", buildToolFile)
+	os.Setenv("CI_DISABLE_TELEMETRY", "true")
+	defer func() {
+		os.Unsetenv("PLUGIN_BUILD_TOOL_FILE")
+		os.Unsetenv("CI_DISABLE_TELEMETRY")
+	}()
+
+	// Function should skip metrics collection when telemetry is disabled
+	collectAndWriteMetrics(tmpDir)
+
+	// File should not be created when telemetry is disabled
+	assert.NoFileExists(t, buildToolFile, "Build tool file should not be created when telemetry disabled")
+}
+
+func TestCollectAndWriteMetrics_SCCDisabled(t *testing.T) {
+	// Create test repo structure
+	tmpDir, err := os.MkdirTemp("", "drone-git-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	testFiles := map[string]string{
+		"main.go":      `package main\nfunc main() {}`,
+		"app.js":       `console.log("test");`,
+		"go.mod":       `module test`,
+		"package.json": `{"name": "test"}`,
+	}
+
+	for filename, content := range testFiles {
+		err := os.WriteFile(filepath.Join(tmpDir, filename), []byte(content), 0644)
+		require.NoError(t, err)
+	}
+
+	// Set up build tool file and disable only SCC metrics
+	buildToolFile := filepath.Join(tmpDir, "build-tool-info.json")
+	os.Setenv("PLUGIN_BUILD_TOOL_FILE", buildToolFile)
+	os.Setenv("DISABLE_SCC_METRICS", "true")
+	os.Setenv("DRONE_REPO", "test/repo")
+	os.Setenv("DRONE_REMOTE_URL", "https://github.com/test/repo.git")
+	defer func() {
+		os.Unsetenv("PLUGIN_BUILD_TOOL_FILE")
+		os.Unsetenv("DISABLE_SCC_METRICS")
+		os.Unsetenv("DRONE_REPO")
+		os.Unsetenv("DRONE_REMOTE_URL")
+	}()
+
+	// Run the function
+	collectAndWriteMetrics(tmpDir)
+
+	// Verify file was still created (build tool data should flow through)
+	assert.FileExists(t, buildToolFile, "Build tool file should be created even with SCC disabled")
+
+	// Read and verify content
+	data, err := os.ReadFile(buildToolFile)
+	require.NoError(t, err)
+
+	var result map[string]interface{}
+	err = json.Unmarshal(data, &result)
+	require.NoError(t, err)
+
+	// Verify build tool data is present (backward compatibility)
+	assert.Contains(t, result, "harness_lang", "Should contain harness_lang even with SCC disabled")
+	assert.Contains(t, result, "harness_build_tool", "Should contain harness_build_tool even with SCC disabled")
+	assert.Contains(t, result, "repository", "Should contain repository info")
+
+	// Verify SCC metrics are empty/zero when disabled
+	assert.Contains(t, result, "metrics", "Should contain metrics field")
+	metrics, ok := result["metrics"].(map[string]interface{})
+	assert.True(t, ok, "Metrics should be a map")
+
+	// SCC metrics should be zero when disabled
+	assert.Equal(t, float64(0), metrics["lines"], "Lines should be 0 when SCC disabled")
+	assert.Equal(t, float64(0), metrics["code"], "Code should be 0 when SCC disabled")
+	assert.Equal(t, float64(0), metrics["files"], "Files should be 0 when SCC disabled")
+}
+
 func TestCollectAndWriteMetrics_WithFile(t *testing.T) {
 	// Create a temporary directory with test files
 	tmpDir, err := os.MkdirTemp("", "drone-git-test-*")
@@ -143,12 +225,10 @@ func TestCollectAndWriteMetrics_WithFile(t *testing.T) {
 	assert.Contains(t, result, "harness_build_tool", "Should contain harness_build_tool")
 	assert.Contains(t, result, "timestamp", "Should contain timestamp")
 	assert.Contains(t, result, "repository", "Should contain repository")
-	assert.Contains(t, result, "repository_url", "Should contain repository_url")
 	assert.Contains(t, result, "metrics", "Should contain metrics")
 
 	// Verify Drone environment variables were captured
-	assert.Equal(t, "test/repo", result["repository"], "Should capture DRONE_REPO")
-	assert.Equal(t, "https://github.com/test/repo.git", result["repository_url"], "Should capture DRONE_REMOTE_URL")
+	assert.Equal(t, "https://github.com/test/repo.git", result["repository"], "Should capture DRONE_REMOTE_URL as repository")
 	assert.Equal(t, "main", result["branch"], "Should capture DRONE_BRANCH")
 	assert.Equal(t, "abc123", result["commit"], "Should capture DRONE_COMMIT")
 }
@@ -178,7 +258,7 @@ func TestBuildToolDataStructure(t *testing.T) {
 		HarnessLang:      "Go,JavaScript",
 		HarnessBuildTool: "Go",
 		Timestamp:        "2025-01-15T10:30:00Z",
-		Repository:       "test/repo",
+		Repository:       "https://github.com/test/repo.git",
 		Branch:           "main",
 		Commit:           "abc123",
 		BuildNumber:      "42",
@@ -191,7 +271,7 @@ func TestBuildToolDataStructure(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(jsonData), "harness_lang", "Should contain harness_lang field")
 	assert.Contains(t, string(jsonData), "harness_build_tool", "Should contain harness_build_tool field")
-	assert.Contains(t, string(jsonData), "test/repo", "Should contain repository name")
+	assert.Contains(t, string(jsonData), "https://github.com/test/repo.git", "Should contain repository URL")
 	assert.Contains(t, string(jsonData), "main", "Should contain branch name")
 	assert.Contains(t, string(jsonData), "abc123", "Should contain commit")
 }
