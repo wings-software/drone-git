@@ -22,7 +22,12 @@ RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
 
 
 RUN groupadd drone && adduser -g drone -s /bin/sh -u 1000 drone
+# Add enhanced binary with embedded scc and telemetry
+COPY drone-git /usr/local/bin/drone-git
+RUN chmod +x /usr/local/bin/drone-git
+
 USER drone:drone
 RUN chmod -R 777 /home/drone
 
-ENTRYPOINT ["/usr/local/bin/clone"]
+# Use enhanced binary (calls existing scripts + adds metrics collection)
+ENTRYPOINT ["/usr/local/bin/drone-git"]

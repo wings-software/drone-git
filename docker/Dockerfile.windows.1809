@@ -32,5 +32,9 @@ USER ContainerAdministrator
 RUN setx /M PATH "%PATH%;C:\Program Files\PowerShell;C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;C:\git-lfs\git-lfs-3.7.0"
 
 
+# Add enhanced binary with embedded scc and telemetry (Windows)
+COPY drone-git.exe /bin/drone-git.exe
+
 SHELL ["pwsh", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
-CMD [ "pwsh", "C:\\bin\\clone.ps1" ]
+# Use enhanced binary (calls existing scripts + adds metrics collection)
+CMD ["C:\\bin\\drone-git.exe"]
