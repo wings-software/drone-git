@@ -75,30 +75,6 @@ This is a test project for telemetry.
 	assert.Equal(t, int64(1), jsMetrics.Files, "Should have 1 JavaScript file")
 }
 
-func TestShouldSkipPath(t *testing.T) {
-	testCases := []struct {
-		path     string
-		expected bool
-	}{
-		{"src/main.go", false},
-		{"node_modules/package/index.js", true},
-		{"vendor/dependency/file.go", true},
-		{".git/config", true},
-		{"build/output.jar", true},
-		{"src/components/Button.tsx", false},
-		{"__pycache__/module.pyc", true},
-		{"coverage/report.html", true},
-		{"normal/path/file.py", false},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.path, func(t *testing.T) {
-			result := shouldSkipPath(tc.path)
-			assert.Equal(t, tc.expected, result, "Path %s should skip: %v", tc.path, tc.expected)
-		})
-	}
-}
-
 func TestCollectAndWriteMetrics_NoFile(t *testing.T) {
 	// Ensure no build tool file is set
 	os.Unsetenv("PLUGIN_BUILD_TOOL_FILE")

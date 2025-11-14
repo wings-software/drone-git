@@ -290,26 +290,6 @@ func collectCodeMetrics(workdir string) (*CodeMetrics, error) {
 	return metrics, nil
 }
 
-// shouldSkipPath determines if a file path should be skipped during analysis
-func shouldSkipPath(path string) bool {
-	skipDirs := []string{
-		"node_modules", "vendor", ".git", ".svn", ".hg",
-		"target", "build", "dist", ".gradle", ".m2",
-		"__pycache__", ".pytest_cache", ".tox",
-		"coverage", ".nyc_output",
-	}
-
-	pathParts := strings.Split(path, string(filepath.Separator))
-	for _, part := range pathParts {
-		for _, skipDir := range skipDirs {
-			if part == skipDir {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // executeBuildToolScript executes the get-buildtool-lang script and lets it write to file
 func executeBuildToolScript(workdir string) error {
 	buildToolFile := os.Getenv("PLUGIN_BUILD_TOOL_FILE")
