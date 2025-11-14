@@ -109,7 +109,72 @@ func TestCollectAndWriteMetrics_NoFile(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	// This should not panic or fail when no file is specified
-	collectAndWriteMetricsSync(tmpDir)
+	collectAndWriteMetrics(tmpDir)
+}
+
+func TestCollectAndWriteMetrics_WithFile(t *testing.T) {
+	// Create a temporary directory with test files
+	tmpDir, err := os.MkdirTemp("", "drone-git-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	// Create test repo structure
+	testFiles := map[string]string{
+		"main.go":      `package main\nfunc main() {}`,
+		"app.js":       `console.log("test");`,
+		"go.mod":       `module test`,
+		"package.json": `{"name": "test"}`,
+	}
+
+	for filename, content := range testFiles {
+		err := os.WriteFile(filepath.Join(tmpDir, filename), []byte(content), 0644)
+		require.NoError(t, err)
+	}
+
+	// Set up build tool file
+	buildToolFile := filepath.Join(tmpDir, "build-tool-info.json")
+	os.Setenv("PLUGIN_BUILD_TOOL_FILE", buildToolFile)
+	defer os.Unsetenv("PLUGIN_BUILD_TOOL_FILE")
+
+	// Set up Drone environment variables
+	os.Setenv("DRONE_REPO", "test/repo")
+	os.Setenv("DRONE_REMOTE_URL", "https://github.com/test/repo.git")
+	os.Setenv("DRONE_BRANCH", "main")
+	os.Setenv("DRONE_COMMIT", "abc123")
+	defer func() {
+		os.Unsetenv("DRONE_REPO")
+		os.Unsetenv("DRONE_REMOTE_URL")
+		os.Unsetenv("DRONE_BRANCH")
+		os.Unsetenv("DRONE_COMMIT")
+	}()
+
+	// Run the function
+	collectAndWriteMetrics(tmpDir)
+
+	// Verify file was created
+	assert.FileExists(t, buildToolFile, "Build tool file should be created")
+
+	// Read and verify content
+	data, err := os.ReadFile(buildToolFile)
+	require.NoError(t, err)
+
+	var result map[string]interface{}
+	err = json.Unmarshal(data, &result)
+	require.NoError(t, err)
+
+	// Verify structure includes both original fields and new metrics
+	assert.Contains(t, result, "harness_lang", "Should contain harness_lang")
+	assert.Contains(t, result, "harness_build_tool", "Should contain harness_build_tool")
+	assert.Contains(t, result, "timestamp", "Should contain timestamp")
+	assert.Contains(t, result, "repository", "Should contain repository")
+	assert.Contains(t, result, "repository_url", "Should contain repository_url")
+	assert.Contains(t, result, "metrics", "Should contain metrics")
+
+	// Verify Drone environment variables were captured
+	assert.Equal(t, "test/repo", result["repository"], "Should capture DRONE_REPO")
+	assert.Equal(t, "https://github.com/test/repo.git", result["repository_url"], "Should capture DRONE_REMOTE_URL")
+	assert.Equal(t, "main", result["branch"], "Should capture DRONE_BRANCH")
+	assert.Equal(t, "abc123", result["commit"], "Should capture DRONE_COMMIT")
 }
 
 func TestBuildToolDataStructure(t *testing.T) {

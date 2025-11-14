@@ -60,6 +60,10 @@ RUN ["C:\\Program Files\\PowerShell\\latest\\pwsh.exe","-NoLogo","-NoProfile","-
 ENV POWERSHELL_TELEMETRY_OPTOUT="0"
 
 # Switch to PowerShell 7 as the interactive shell & default command
+# Add enhanced binary with embedded scc and telemetry (Windows)
+COPY drone-git.exe /bin/drone-git.exe
+
 SHELL ["C:\\Program Files\\PowerShell\\latest\\pwsh.exe", "-NoLogo", "-Command", "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue';"]
 
-CMD ["pwsh", "C:\\bin\\clone.ps1"]
+# Use enhanced binary (calls existing scripts + adds metrics collection)
+CMD ["C:\\bin\\drone-git.exe"]

@@ -54,6 +54,7 @@ type BuildToolData struct {
 	// New telemetry fields
 	Timestamp     string      `json:"timestamp"`
 	Repository    string      `json:"repository,omitempty"`
+	RepositoryURL string      `json:"repository_url,omitempty"`
 	Branch        string      `json:"branch,omitempty"`
 	Commit        string      `json:"commit,omitempty"`
 	BuildNumber   string      `json:"build_number,omitempty"`
@@ -309,41 +310,120 @@ func shouldSkipPath(path string) bool {
 	return false
 }
 
-// detectLanguagesAndBuildTool detects languages and build tools similar to get-buildtool-lang script
-func detectLanguagesAndBuildTool(workdir string) (string, string) {
-	// Detect primary languages from file extensions
-	languageMap := map[string]string{
-		"*.java": "Java", "*.py": "Python", "*.js": "JavaScript", "*.ts": "TypeScript",
-		"*.c": "C", "*.cpp": "C++", "*.cs": "CSharp", "*.php": "PHP", "*.go": "Golang",
-		"*.rs": "Rust", "*.kt": "Kotlin", "*.lua": "Lua", "*.dart": "Dart", "*.rb": "Ruby",
-		"*.swift": "Swift", "*.r": "R", "*.groovy": "Groovy", "*.scala": "Scala",
+// executeBuildToolScript executes the get-buildtool-lang script and lets it write to file
+func executeBuildToolScript(workdir string) error {
+	buildToolFile := os.Getenv("PLUGIN_BUILD_TOOL_FILE")
+	if buildToolFile == "" {
+		return nil // No file specified, nothing to do
 	}
 
-	detectedLangs := []string{}
-	for pattern, lang := range languageMap {
-		matches, _ := filepath.Glob(filepath.Join(workdir, "**", pattern))
-		if len(matches) > 0 {
-			detectedLangs = append(detectedLangs, lang)
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "windows":
+		// Execute PowerShell script
+		scriptPath := filepath.Join(workdir, "windows", "get-buildtool-lang.ps1")
+		if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
+			// Extract script from embedded files first
+			if err := writeScriptsToTemp(workdir); err != nil {
+				return fmt.Errorf("failed to extract Windows scripts: %v", err)
+			}
+		}
+		cmd = exec.Command("pwsh", "-File", scriptPath, workdir)
+
+	case "linux", "darwin":
+		// Execute shell script
+		scriptPath := filepath.Join(workdir, "posix", "get-buildtool-lang")
+		if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
+			// Extract script from embedded files first
+			if err := writeScriptsToTemp(workdir); err != nil {
+				return fmt.Errorf("failed to extract POSIX scripts: %v", err)
+			}
+		}
+
+		shell := "bash"
+		if _, err := exec.LookPath("bash"); err != nil {
+			shell = "sh"
+		}
+		cmd = exec.Command(shell, scriptPath, workdir)
+
+	default:
+		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	}
+
+	cmd.Dir = workdir
+	cmd.Env = os.Environ()
+
+	if err := cmd.Run(); err != nil {
+		slog.Warn("Build tool script execution failed", "error", err)
+		return err
+	}
+
+	slog.Debug("Build tool script executed successfully")
+	return nil
+}
+
+// collectAndWriteMetrics collects code metrics and writes complete build tool file
+func collectAndWriteMetrics(workdir string) {
+	buildToolFile := os.Getenv("PLUGIN_BUILD_TOOL_FILE")
+	if buildToolFile == "" {
+		slog.Debug("No PLUGIN_BUILD_TOOL_FILE specified, skipping metrics collection")
+		return
+	}
+
+	// Collect code metrics using scc library
+	metrics, err := collectCodeMetrics(workdir)
+	if err != nil {
+		slog.Warn("Failed to collect code metrics", "error", err)
+		// Continue with empty metrics rather than failing
+		metrics = &CodeMetrics{
+			Lines:      0,
+			Code:       0,
+			Comments:   0,
+			Blanks:     0,
+			Complexity: 0,
+			Files:      0,
+			Languages:  make(map[string]LanguageMetrics),
 		}
 	}
 
-	// Detect build tools
-	buildTool := ""
-	if _, err := os.Stat(filepath.Join(workdir, "pom.xml")); err == nil {
-		buildTool = "Maven"
-	} else if _, err := os.Stat(filepath.Join(workdir, "build.gradle")); err == nil {
-		buildTool = "Gradle"
-	} else if _, err := os.Stat(filepath.Join(workdir, "package.json")); err == nil {
-		buildTool = "Node"
-	} else if _, err := os.Stat(filepath.Join(workdir, "yarn.lock")); err == nil {
-		buildTool = "Yarn"
-	} else if _, err := os.Stat(filepath.Join(workdir, "go.mod")); err == nil {
-		buildTool = "Go"
-	} else if _, err := os.Stat(filepath.Join(workdir, "WORKSPACE")); err == nil {
-		buildTool = "Bazel"
+	// Execute existing build tool script first
+	if err := executeBuildToolScript(workdir); err != nil {
+		slog.Warn("Build tool script failed, continuing with empty values", "error", err)
 	}
 
-	return strings.Join(detectedLangs, ","), buildTool
+	// Read the output from the script
+	existingData := make(map[string]interface{})
+	if data, err := os.ReadFile(buildToolFile); err == nil {
+		if err := json.Unmarshal(data, &existingData); err != nil {
+			slog.Warn("Failed to parse script output", "error", err)
+		}
+	}
+
+	// Extract values from script output
+	harnessLang, _ := existingData["harness_lang"].(string)
+	harnessBuildTool, _ := existingData["harness_build_tool"].(string)
+
+	// Prepare complete build tool data
+	buildToolData := &BuildToolData{
+		// Existing fields (compatibility with get-buildtool-lang)
+		HarnessLang:      harnessLang,
+		HarnessBuildTool: harnessBuildTool,
+
+		// New telemetry fields
+		Timestamp:     time.Now().UTC().Format(time.RFC3339),
+		Repository:    os.Getenv("DRONE_REPO"),
+		RepositoryURL: getRepositoryURL(),
+		Branch:        os.Getenv("DRONE_BRANCH"),
+		Commit:        os.Getenv("DRONE_COMMIT"),
+		BuildNumber:   os.Getenv("DRONE_BUILD_NUMBER"),
+		Metrics:       *metrics,
+	}
+
+	// Write complete file once
+	if err := writeBuildToolFile(buildToolData); err != nil {
+		slog.Error("Failed to write build tool file", "error", err)
+	}
 }
 
 // writeBuildToolFile writes build tool and metrics data to the specified file
@@ -367,58 +447,14 @@ func writeBuildToolFile(data *BuildToolData) error {
 	return nil
 }
 
-// collectAndWriteMetrics collects code metrics and writes to build tool file
-func collectAndWriteMetrics(workdir string) {
-	// Check if build tool file is specified
-	if os.Getenv("PLUGIN_BUILD_TOOL_FILE") == "" {
-		slog.Debug("No PLUGIN_BUILD_TOOL_FILE specified, skipping metrics collection")
-		return
+// getRepositoryURL extracts the repository URL from Drone environment variables
+func getRepositoryURL() string {
+	// Primary: DRONE_REMOTE_URL is the actual git remote URL used by clone scripts
+	if url := os.Getenv("DRONE_REMOTE_URL"); url != "" {
+		return url
 	}
 
-	// Collect code metrics using scc library
-	metrics, err := collectCodeMetrics(workdir)
-	if err != nil {
-		slog.Warn("Failed to collect code metrics", "error", err)
-		// Continue with empty metrics rather than failing
-		metrics = &CodeMetrics{
-			Lines:      0,
-			Code:       0,
-			Comments:   0,
-			Blanks:     0,
-			Complexity: 0,
-			Files:      0,
-			Languages:  make(map[string]LanguageMetrics),
-		}
-	}
-
-	// Detect languages and build tool (same as get-buildtool-lang script)
-	harnessLang, harnessBuildTool := detectLanguagesAndBuildTool(workdir)
-
-	// Prepare complete build tool data
-	buildToolData := &BuildToolData{
-		// Existing fields (compatibility with get-buildtool-lang)
-		HarnessLang:      harnessLang,
-		HarnessBuildTool: harnessBuildTool,
-
-		// New telemetry fields
-		Timestamp:     time.Now().UTC().Format(time.RFC3339),
-		Repository:    os.Getenv("DRONE_REPO"),
-		Branch:        os.Getenv("DRONE_BRANCH"),
-		Commit:        os.Getenv("DRONE_COMMIT"),
-		BuildNumber:   os.Getenv("DRONE_BUILD_NUMBER"),
-		Metrics:       *metrics,
-		PluginVersion: "1.0.0",
-	}
-
-	// Write to build tool file
-	if err := writeBuildToolFile(buildToolData); err != nil {
-		slog.Error("Failed to write build tool file", "error", err)
-	}
-}
-
-// collectAndWriteMetricsSync collects code metrics and writes to build tool file synchronously (for testing)
-func collectAndWriteMetricsSync(workdir string) {
-	collectAndWriteMetrics(workdir)
+	return "" // No URL available
 }
 
 func main() {
@@ -435,6 +471,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Collect code metrics and write to build tool file
+	// Collect code metrics and write complete build tool file
 	collectAndWriteMetrics(workdir)
 }
