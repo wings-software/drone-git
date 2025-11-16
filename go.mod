@@ -1,6 +1,7 @@
 module github.com/harness/drone-git
 
-go 1.25.2
+go 1.23.0
+toolchain go1.23.8
 
 require (
 	github.com/stretchr/testify v1.10.0
