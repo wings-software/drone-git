@@ -28,7 +28,7 @@ COPY release/windows/amd64/drone-git.exe /bin/drone-git.exe
 
 # https://github.com/PowerShell/PowerShell/issues/6211#issuecomment-367477137
 USER ContainerAdministrator
-RUN setx /M PATH "%PATH%;C:\Program Files\PowerShell;C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;C:\git-lfs\git-lfs-3.6.0"
+RUN setx /M PATH "%PATH%;C:\Program Files\PowerShell;C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;C:\git-lfs\git-lfs-3.7.0"
 SHELL ["pwsh", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 USER ContainerUser
 # Use enhanced binary (calls existing scripts + adds metrics collection)
