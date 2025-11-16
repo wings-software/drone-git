@@ -158,6 +158,8 @@ func TestCollectAndWriteMetrics_SCCDisabled(t *testing.T) {
 	assert.Contains(t, result, "harness_lang", "Should contain harness_lang even with SCC disabled")
 	assert.Contains(t, result, "harness_build_tool", "Should contain harness_build_tool even with SCC disabled")
 	assert.Contains(t, result, "repository", "Should contain repository info")
+	assert.Contains(t, result, "build_event", "Should contain build_event info")
+	assert.Contains(t, result, "plugin_version", "Should contain plugin_version")
 
 	// Verify SCC metrics are empty/zero when disabled
 	assert.Contains(t, result, "metrics", "Should contain metrics field")
@@ -194,16 +196,17 @@ func TestCollectAndWriteMetrics_WithFile(t *testing.T) {
 	os.Setenv("PLUGIN_BUILD_TOOL_FILE", buildToolFile)
 	defer os.Unsetenv("PLUGIN_BUILD_TOOL_FILE")
 
-	// Set up Drone environment variables
-	os.Setenv("DRONE_REPO", "test/repo")
+	// Ensure clean environment for push/branch build test
+	os.Unsetenv("DRONE_TAG")
+
+	// Set up Drone environment variables for push build (branch)
 	os.Setenv("DRONE_REMOTE_URL", "https://github.com/test/repo.git")
-	os.Setenv("DRONE_BRANCH", "main")
-	os.Setenv("DRONE_COMMIT", "abc123")
+	os.Setenv("DRONE_BUILD_EVENT", "push")
+	os.Setenv("DRONE_COMMIT_BRANCH", "main")
 	defer func() {
-		os.Unsetenv("DRONE_REPO")
 		os.Unsetenv("DRONE_REMOTE_URL")
-		os.Unsetenv("DRONE_BRANCH")
-		os.Unsetenv("DRONE_COMMIT")
+		os.Unsetenv("DRONE_BUILD_EVENT")
+		os.Unsetenv("DRONE_COMMIT_BRANCH")
 	}()
 
 	// Run the function
@@ -223,14 +226,65 @@ func TestCollectAndWriteMetrics_WithFile(t *testing.T) {
 	// Verify structure includes both original fields and new metrics
 	assert.Contains(t, result, "harness_lang", "Should contain harness_lang")
 	assert.Contains(t, result, "harness_build_tool", "Should contain harness_build_tool")
-	assert.Contains(t, result, "timestamp", "Should contain timestamp")
 	assert.Contains(t, result, "repository", "Should contain repository")
+	assert.Contains(t, result, "build_event", "Should contain build_event")
+	assert.Contains(t, result, "build_event_value", "Should contain build_event_value")
 	assert.Contains(t, result, "metrics", "Should contain metrics")
 
 	// Verify Drone environment variables were captured
 	assert.Equal(t, "https://github.com/test/repo.git", result["repository"], "Should capture DRONE_REMOTE_URL as repository")
-	assert.Equal(t, "main", result["branch"], "Should capture DRONE_BRANCH")
-	assert.Equal(t, "abc123", result["commit"], "Should capture DRONE_COMMIT")
+	assert.Equal(t, "branch", result["build_event"], "Should detect branch build event")
+	assert.Equal(t, "main", result["build_event_value"], "Should use branch name as event value")
+}
+
+func TestCollectAndWriteMetrics_TagBuild(t *testing.T) {
+	// Create test repo structure
+	tmpDir, err := os.MkdirTemp("", "drone-git-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	testFiles := map[string]string{
+		"main.go": `package main\nfunc main() {}`,
+		"go.mod":  `module test`,
+	}
+
+	for filename, content := range testFiles {
+		err := os.WriteFile(filepath.Join(tmpDir, filename), []byte(content), 0644)
+		require.NoError(t, err)
+	}
+
+	// Set up build tool file
+	buildToolFile := filepath.Join(tmpDir, "build-tool-info.json")
+	os.Setenv("PLUGIN_BUILD_TOOL_FILE", buildToolFile)
+	defer os.Unsetenv("PLUGIN_BUILD_TOOL_FILE")
+
+	// Set up Drone environment variables for tag build
+	os.Setenv("DRONE_BUILD_EVENT", "tag")
+	os.Setenv("DRONE_TAG", "v1.7.8")
+	os.Setenv("DRONE_REMOTE_URL", "https://github.com/test/repo.git")
+	defer func() {
+		os.Unsetenv("DRONE_BUILD_EVENT")
+		os.Unsetenv("DRONE_TAG")
+		os.Unsetenv("DRONE_REMOTE_URL")
+	}()
+
+	// Run the function
+	collectAndWriteMetrics(tmpDir)
+
+	// Verify file was created
+	assert.FileExists(t, buildToolFile, "Build tool file should be created")
+
+	// Read and verify content
+	data, err := os.ReadFile(buildToolFile)
+	require.NoError(t, err)
+
+	var result map[string]interface{}
+	err = json.Unmarshal(data, &result)
+	require.NoError(t, err)
+
+	// Verify tag build event
+	assert.Equal(t, "tag", result["build_event"], "Should detect tag build event")
+	assert.Equal(t, "v1.7.8", result["build_event_value"], "Should use tag as event value")
 }
 
 func TestBuildToolDataStructure(t *testing.T) {
@@ -257,11 +311,9 @@ func TestBuildToolDataStructure(t *testing.T) {
 	buildToolData := BuildToolData{
 		HarnessLang:      "Go,JavaScript",
 		HarnessBuildTool: "Go",
-		Timestamp:        "2025-01-15T10:30:00Z",
 		Repository:       "https://github.com/test/repo.git",
-		Branch:           "main",
-		Commit:           "abc123",
-		BuildNumber:      "42",
+		BuildEvent:       "branch",
+		BuildEventValue:  "main",
 		Metrics:          metrics,
 		PluginVersion:    "1.0.0",
 	}
@@ -272,6 +324,6 @@ func TestBuildToolDataStructure(t *testing.T) {
 	assert.Contains(t, string(jsonData), "harness_lang", "Should contain harness_lang field")
 	assert.Contains(t, string(jsonData), "harness_build_tool", "Should contain harness_build_tool field")
 	assert.Contains(t, string(jsonData), "https://github.com/test/repo.git", "Should contain repository URL")
-	assert.Contains(t, string(jsonData), "main", "Should contain branch name")
-	assert.Contains(t, string(jsonData), "abc123", "Should contain commit")
+	assert.Contains(t, string(jsonData), "branch", "Should contain build_event")
+	assert.Contains(t, string(jsonData), "main", "Should contain branch name and event value")
 }

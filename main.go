@@ -21,6 +21,11 @@ import (
 
 const mode os.FileMode = 0755
 
+// Version information (set during build)
+var (
+	version = "dev"
+)
+
 //go:embed posix/* windows/*
 var scriptFS embed.FS // embedding both posix and windows directory scripts to be available to the binary
 
@@ -52,13 +57,11 @@ type BuildToolData struct {
 	HarnessBuildTool string `json:"harness_build_tool"`
 
 	// New telemetry fields
-	Timestamp     string      `json:"timestamp"`
-	Repository    string      `json:"repository,omitempty"`
-	Branch        string      `json:"branch,omitempty"`
-	Commit        string      `json:"commit,omitempty"`
-	BuildNumber   string      `json:"build_number,omitempty"`
-	Metrics       CodeMetrics `json:"metrics"`
-	PluginVersion string      `json:"plugin_version"`
+	Repository      string      `json:"repository,omitempty"`
+	BuildEvent      string      `json:"build_event,omitempty"`
+	BuildEventValue string      `json:"build_event_value,omitempty"`
+	Metrics         CodeMetrics `json:"metrics"`
+	PluginVersion   string      `json:"plugin_version"`
 }
 
 func writeScriptsToTemp(tmpDir string) error {
@@ -405,19 +408,21 @@ func collectAndWriteMetrics(workdir string) {
 		}
 	}
 
+	// Get build event and value
+	buildEvent, buildEventValue := getBuildEventInfo()
+
 	// Prepare complete build tool data (always includes build tool info)
 	buildToolData := &BuildToolData{
 		// Always include build tool fields (ensures backward compatibility)
 		HarnessLang:      harnessLang,
 		HarnessBuildTool: harnessBuildTool,
 
-		// Context fields (only if not fully disabled)
-		Timestamp:   time.Now().UTC().Format(time.RFC3339),
-		Repository:  getRepositoryURL(),
-		Branch:      os.Getenv("DRONE_BRANCH"),
-		Commit:      os.Getenv("DRONE_COMMIT"),
-		BuildNumber: os.Getenv("DRONE_BUILD_NUMBER"),
-		Metrics:     *metrics,
+		// Context fields
+		Repository:      getRepositoryURL(),
+		BuildEvent:      buildEvent,
+		BuildEventValue: buildEventValue,
+		Metrics:         *metrics,
+		PluginVersion:   getPluginVersion(),
 	}
 
 	// Always write the file (ensures build tool data flows through)
@@ -455,6 +460,59 @@ func getRepositoryURL() string {
 	}
 
 	return "" // No URL available
+}
+
+// getPluginVersion returns the plugin version from various sources
+func getPluginVersion() string {
+	// 1. Check if version was set during build (via -ldflags)
+	if version != "dev" && version != "" {
+		return version
+	}
+	// 3. Fallback to default
+	return "1.0.0"
+}
+
+// getBuildEventInfo determines build event type and value based on available Drone environment variables
+func getBuildEventInfo() (string, string) {
+	// Use DRONE_BUILD_EVENT as primary source (used in existing scripts)
+	buildEvent := os.Getenv("DRONE_BUILD_EVENT")
+
+	switch buildEvent {
+	case "tag":
+		// TAG build - use DRONE_TAG as value
+		if droneTag := os.Getenv("DRONE_TAG"); droneTag != "" {
+			return "tag", droneTag
+		}
+		return "tag", ""
+
+	case "pull_request":
+		// PR build - use source branch if available
+		if sourceBranch := os.Getenv("DRONE_SOURCE_BRANCH"); sourceBranch != "" {
+			return "pull_request", sourceBranch
+		}
+		return "pull_request", ""
+
+	case "push":
+		// Push to branch - try to get branch info
+		if commitBranch := os.Getenv("DRONE_COMMIT_BRANCH"); commitBranch != "" {
+			return "branch", commitBranch
+		}
+		return "push", ""
+
+	default:
+		// Fallback: Check for tag via DRONE_TAG even if DRONE_BUILD_EVENT not set
+		if droneTag := os.Getenv("DRONE_TAG"); droneTag != "" {
+			return "tag", droneTag
+		}
+
+		// Fallback: Check for commit via DRONE_COMMIT_SHA
+		if commitSha := os.Getenv("DRONE_COMMIT_SHA"); commitSha != "" {
+			return "commit", commitSha
+		}
+	}
+
+	// Unknown build type
+	return "", ""
 }
 
 func main() {
