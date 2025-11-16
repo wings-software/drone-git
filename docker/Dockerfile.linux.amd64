@@ -20,7 +20,7 @@ RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
 ADD posix/* /usr/local/bin/
 
 # Add enhanced binary with embedded scc and telemetry
-COPY drone-git /usr/local/bin/drone-git
+COPY release/linux/amd64/drone-git /usr/local/bin/drone-git
 RUN chmod +x /usr/local/bin/drone-git
 
 # Use enhanced binary (calls existing scripts + adds metrics collection)

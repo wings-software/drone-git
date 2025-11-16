@@ -24,7 +24,7 @@ COPY --from=git C:\Windows\System32\OpenSSH\ /openssh
 ADD windows/* /bin/
 
 # Add enhanced binary with embedded scc and telemetry (Windows)
-COPY drone-git.exe /bin/drone-git.exe
+COPY release/windows/amd64/drone-git.exe /bin/drone-git.exe
 
 # https://github.com/PowerShell/PowerShell/issues/6211#issuecomment-367477137
 USER ContainerAdministrator
