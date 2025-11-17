@@ -213,7 +213,7 @@ func collectCodeMetrics(workdir string) (*CodeMetrics, error) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				done <- fmt.Errorf("scc analysis panicked: %v", r)
+				done <- fmt.Errorf("analysis panicked: %v", r)
 			}
 		}()
 
@@ -239,7 +239,7 @@ func collectCodeMetrics(workdir string) (*CodeMetrics, error) {
 
 		// Parse JSON results
 		if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
-			done <- fmt.Errorf("failed to parse scc results: %v", err)
+			done <- fmt.Errorf("failed to parse analysis results: %v", err)
 			return
 		}
 
@@ -253,7 +253,7 @@ func collectCodeMetrics(workdir string) (*CodeMetrics, error) {
 			return nil, err
 		}
 	case <-ctx.Done():
-		return nil, fmt.Errorf("scc analysis timed out after 5 seconds")
+		return nil, fmt.Errorf("analysis timed out after 5 seconds")
 	}
 
 	languages := make(map[string]LanguageMetrics)
@@ -384,7 +384,7 @@ func tryCollectAndWriteMetrics(workdir string) error {
 	// Collect SCC metrics only if not specifically disabled
 	var metrics *CodeMetrics
 	if os.Getenv("DISABLE_SCC_METRICS") != "" {
-		slog.Debug("SCC metrics disabled via DISABLE_SCC_METRICS, using empty metrics")
+		slog.Debug("Metrics disabled, using empty metrics")
 		metrics = &CodeMetrics{
 			Lines:      0,
 			Code:       0,
@@ -398,7 +398,7 @@ func tryCollectAndWriteMetrics(workdir string) error {
 		var err error
 		metrics, err = collectCodeMetrics(workdir)
 		if err != nil {
-			slog.Warn("Failed to collect code metrics", "error", err)
+			slog.Warn("Failed to collect metrics", "error", err)
 			// Use empty metrics if scc fails
 			metrics = &CodeMetrics{
 				Lines:      0,
@@ -542,6 +542,24 @@ func getBuildEventInfo() (string, string) {
 	return "", ""
 }
 
+// getWorkspaceDirectory returns the directory to analyze (DRONE_WORKSPACE preferred, current dir as fallback)
+func getWorkspaceDirectory() (string, error) {
+	// 1. Use DRONE_WORKSPACE if set (where repository gets cloned)
+	if workspace := os.Getenv("DRONE_WORKSPACE"); workspace != "" {
+		slog.Debug("Using DRONE_WORKSPACE for analysis", "directory", workspace)
+		return workspace, nil
+	}
+
+	// 2. Fallback to current working directory
+	workdir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("cannot get working directory: %v", err)
+	}
+
+	slog.Debug("Using current directory for analysis", "directory", workdir)
+	return workdir, nil
+}
+
 func main() {
 	// Ensure temp directory cleanup happens regardless of execution path
 	defer cleanupTempDir()
@@ -554,10 +572,10 @@ func main() {
 	}
 
 	// Git clone succeeded - now attempt analytics (optional)
-	// Get working directory for analytics
-	workdir, err := os.Getwd()
+	// Get workspace directory for analysis
+	workdir, err := getWorkspaceDirectory()
 	if err != nil {
-		slog.Warn("Cannot get workdir for analytics, skipping metrics collection", "error", err)
+		slog.Warn("Cannot get workspace directory for analytics, skipping metrics collection", "error", err)
 		return // Analytics failure - don't fail the step, just skip
 	}
 
