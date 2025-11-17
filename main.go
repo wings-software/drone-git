@@ -29,7 +29,6 @@ var (
 //go:embed posix/* windows/*
 var scriptFS embed.FS // embedding both posix and windows directory scripts to be available to the binary
 
-// CodeMetrics represents the code statistics collected by scc
 type CodeMetrics struct {
 	Lines      int64                      `json:"lines"`
 	Code       int64                      `json:"code"`
@@ -100,15 +99,30 @@ func writeScriptsToTemp(tmpDir string) error {
 	})
 }
 
+// Global temp directory for script storage (shared between functions)
+var globalTmpDir string
+
+// cleanupTempDir safely removes the temp directory if it exists
+func cleanupTempDir() {
+	if globalTmpDir != "" {
+		if err := os.RemoveAll(globalTmpDir); err != nil {
+			slog.Warn("Failed to cleanup temp directory", "dir", globalTmpDir, "error", err)
+		} else {
+			slog.Debug("Cleaned up temp directory", "dir", globalTmpDir)
+		}
+		globalTmpDir = ""
+	}
+}
+
 func runGitClone() error {
-	// Create a unique temporary subdirectory
-	tmpDir, err := os.MkdirTemp("", "drone-git-*")
+	var err error
+	// Create a unique temporary subdirectory (keep alive for script reuse in metrics)
+	globalTmpDir, err = os.MkdirTemp("", "drone-git-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
 
-	if err := writeScriptsToTemp(tmpDir); err != nil {
+	if err := writeScriptsToTemp(globalTmpDir); err != nil {
 		return err
 	}
 
@@ -123,7 +137,7 @@ func runGitClone() error {
 
 	switch runtime.GOOS {
 	case "windows":
-		scriptPath := filepath.Join(tmpDir, "windows", "clone.ps1")
+		scriptPath := filepath.Join(globalTmpDir, "windows", "clone.ps1")
 		script := fmt.Sprintf(
 			"$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; %s",
 			scriptPath)
@@ -136,7 +150,7 @@ func runGitClone() error {
 			shell = "sh"
 		}
 
-		scriptPath := filepath.Join(tmpDir, "posix", "script")
+		scriptPath := filepath.Join(globalTmpDir, "posix", "script")
 		cmd := exec.CommandContext(ctx, shell, scriptPath)
 		return runCmds([]*exec.Cmd{cmd}, os.Environ(), workdir, os.Stdout, os.Stderr)
 
@@ -166,9 +180,7 @@ func trace(cmd *exec.Cmd) {
 	slog.Debug(s)
 }
 
-// collectCodeMetrics analyzes code using scc Go library directly
 func collectCodeMetrics(workdir string) (*CodeMetrics, error) {
-	slog.Info("Collecting code metrics using scc library", "directory", workdir)
 
 	// Set up timeout for analysis
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -241,10 +253,9 @@ func collectCodeMetrics(workdir string) (*CodeMetrics, error) {
 			return nil, err
 		}
 	case <-ctx.Done():
-		return nil, fmt.Errorf("scc analysis timed out after 30 seconds")
+		return nil, fmt.Errorf("scc analysis timed out after 5 seconds")
 	}
 
-	// Convert scc results to our telemetry format
 	languages := make(map[string]LanguageMetrics)
 	var totalLines, totalCode, totalComments, totalBlanks, totalComplexity, totalFiles int64
 
@@ -284,45 +295,32 @@ func collectCodeMetrics(workdir string) (*CodeMetrics, error) {
 		Languages:  languages,
 	}
 
-	slog.Info("Code metrics collected using scc library",
-		"total_lines", totalLines,
-		"total_code", totalCode,
-		"total_files", totalFiles,
-		"languages", len(languages))
-
 	return metrics, nil
 }
 
-// executeBuildToolScript executes the get-buildtool-lang script and lets it write to file
+// executeBuildToolScript executes the get-buildtool-lang script from temp directory
 func executeBuildToolScript(workdir string) error {
 	buildToolFile := os.Getenv("PLUGIN_BUILD_TOOL_FILE")
 	if buildToolFile == "" {
 		return nil // No file specified, nothing to do
 	}
 
+	// Scripts are already extracted to globalTmpDir by runGitClone()
+	if globalTmpDir == "" {
+		return fmt.Errorf("temp directory not initialized - runGitClone() must be called first")
+	}
+
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
 	case "windows":
-		// Execute PowerShell script
-		scriptPath := filepath.Join(workdir, "windows", "get-buildtool-lang.ps1")
-		if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-			// Extract script from embedded files first
-			if err := writeScriptsToTemp(workdir); err != nil {
-				return fmt.Errorf("failed to extract Windows scripts: %v", err)
-			}
-		}
+		// Execute PowerShell script from temp directory (no workspace pollution)
+		scriptPath := filepath.Join(globalTmpDir, "windows", "get-buildtool-lang.ps1")
 		cmd = exec.Command("pwsh", "-File", scriptPath, workdir)
 
 	case "linux", "darwin":
-		// Execute shell script
-		scriptPath := filepath.Join(workdir, "posix", "get-buildtool-lang")
-		if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-			// Extract script from embedded files first
-			if err := writeScriptsToTemp(workdir); err != nil {
-				return fmt.Errorf("failed to extract POSIX scripts: %v", err)
-			}
-		}
+		// Execute shell script from temp directory (no workspace pollution)
+		scriptPath := filepath.Join(globalTmpDir, "posix", "get-buildtool-lang")
 
 		shell := "bash"
 		if _, err := exec.LookPath("bash"); err != nil {
@@ -346,18 +344,24 @@ func executeBuildToolScript(workdir string) error {
 	return nil
 }
 
-// collectAndWriteMetrics collects code metrics and writes complete build tool file
-func collectAndWriteMetrics(workdir string) {
+// tryCollectAndWriteMetrics attempts to collect code metrics and write build tool file
+func tryCollectAndWriteMetrics(workdir string) error {
 	buildToolFile := os.Getenv("PLUGIN_BUILD_TOOL_FILE")
 	if buildToolFile == "" {
 		slog.Debug("No PLUGIN_BUILD_TOOL_FILE specified, skipping metrics collection")
-		return
+		return nil
 	}
 
 	// Respect CI_DISABLE_TELEMETRY flag - disables everything (same as original script condition)
 	if os.Getenv("CI_DISABLE_TELEMETRY") != "" {
 		slog.Debug("All telemetry disabled via CI_DISABLE_TELEMETRY, skipping collection")
-		return
+		return nil
+	}
+
+	// Skip metrics collection if temp directory not available (runGitClone not called)
+	if globalTmpDir == "" {
+		slog.Debug("No temp directory available, skipping metrics collection")
+		return nil
 	}
 
 	// Always execute build tool script first (basic harness_lang, harness_build_tool data)
@@ -394,7 +398,7 @@ func collectAndWriteMetrics(workdir string) {
 		var err error
 		metrics, err = collectCodeMetrics(workdir)
 		if err != nil {
-			slog.Warn("Failed to collect SCC metrics", "error", err)
+			slog.Warn("Failed to collect code metrics", "error", err)
 			// Use empty metrics if scc fails
 			metrics = &CodeMetrics{
 				Lines:      0,
@@ -427,7 +431,32 @@ func collectAndWriteMetrics(workdir string) {
 
 	// Always write the file (ensures build tool data flows through)
 	if err := writeBuildToolFile(buildToolData); err != nil {
-		slog.Error("Failed to write build tool file", "error", err)
+		return fmt.Errorf("failed to write build tool file: %v", err)
+	}
+
+	return nil
+}
+
+// collectAndWriteMetrics is a wrapper for backward compatibility (used by tests)
+func collectAndWriteMetrics(workdir string) {
+	// For tests: initialize temp directory if needed (production skips if not available)
+	if globalTmpDir == "" {
+		var err error
+		globalTmpDir, err = os.MkdirTemp("", "drone-git-test-*")
+		if err != nil {
+			slog.Warn("Failed to create temp directory for test", "error", err)
+			return
+		}
+		if err := writeScriptsToTemp(globalTmpDir); err != nil {
+			slog.Warn("Failed to extract scripts for test", "error", err)
+			return
+		}
+		slog.Debug("Initialized temp directory for test", "dir", globalTmpDir)
+		defer cleanupTempDir() // Cleanup after test
+	}
+
+	if err := tryCollectAndWriteMetrics(workdir); err != nil {
+		slog.Warn("Metrics collection failed", "error", err)
 	}
 }
 
@@ -447,8 +476,6 @@ func writeBuildToolFile(data *BuildToolData) error {
 	if err := os.WriteFile(buildToolFile, jsonData, 0644); err != nil {
 		return fmt.Errorf("failed to write build tool file %s: %v", buildToolFile, err)
 	}
-
-	slog.Info("Build tool and metrics data written", "file", buildToolFile, "size", len(jsonData))
 	return nil
 }
 
@@ -516,19 +543,28 @@ func getBuildEventInfo() (string, string) {
 }
 
 func main() {
-	// Get current working directory for telemetry
-	workdir, err := os.Getwd()
-	if err != nil {
-		slog.Error("cannot get workdir", "error", err)
-		os.Exit(1)
-	}
+	// Ensure temp directory cleanup happens regardless of execution path
+	defer cleanupTempDir()
 
-	// Run git clone
+	// Run git clone first (core functionality - can fail the step)
 	if err := runGitClone(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		cleanupTempDir() // Manual cleanup before exit
+		os.Exit(1)       // Core git functionality failure - should fail step
+	}
+
+	// Git clone succeeded - now attempt analytics (optional)
+	// Get working directory for analytics
+	workdir, err := os.Getwd()
+	if err != nil {
+		slog.Warn("Cannot get workdir for analytics, skipping metrics collection", "error", err)
+		return // Analytics failure - don't fail the step, just skip
 	}
 
 	// Collect code metrics and write complete build tool file
-	collectAndWriteMetrics(workdir)
+	// Note: Analytics failures should not fail the step
+	if err := tryCollectAndWriteMetrics(workdir); err != nil {
+		slog.Warn("Metrics collection failed but continuing (analytics only)", "error", err)
+		// Continue - don't fail the step for analytics issues
+	}
 }
