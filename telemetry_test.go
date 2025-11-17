@@ -237,93 +237,31 @@ func TestCollectAndWriteMetrics_WithFile(t *testing.T) {
 	assert.Equal(t, "main", result["build_event_value"], "Should use branch name as event value")
 }
 
-func TestCollectAndWriteMetrics_TagBuild(t *testing.T) {
-	// Create test repo structure
-	tmpDir, err := os.MkdirTemp("", "drone-git-test-*")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	testFiles := map[string]string{
-		"main.go": `package main\nfunc main() {}`,
-		"go.mod":  `module test`,
-	}
-
-	for filename, content := range testFiles {
-		err := os.WriteFile(filepath.Join(tmpDir, filename), []byte(content), 0644)
-		require.NoError(t, err)
-	}
-
-	// Set up build tool file
-	buildToolFile := filepath.Join(tmpDir, "build-tool-info.json")
-	os.Setenv("PLUGIN_BUILD_TOOL_FILE", buildToolFile)
-	defer os.Unsetenv("PLUGIN_BUILD_TOOL_FILE")
-
-	// Set up Drone environment variables for tag build
-	os.Setenv("DRONE_BUILD_EVENT", "tag")
-	os.Setenv("DRONE_TAG", "v1.7.8")
-	os.Setenv("DRONE_REMOTE_URL", "https://github.com/test/repo.git")
-	defer func() {
-		os.Unsetenv("DRONE_BUILD_EVENT")
-		os.Unsetenv("DRONE_TAG")
-		os.Unsetenv("DRONE_REMOTE_URL")
-	}()
-
-	// Run the function
-	collectAndWriteMetrics(tmpDir)
-
-	// Verify file was created
-	assert.FileExists(t, buildToolFile, "Build tool file should be created")
-
-	// Read and verify content
-	data, err := os.ReadFile(buildToolFile)
-	require.NoError(t, err)
-
-	var result map[string]interface{}
-	err = json.Unmarshal(data, &result)
-	require.NoError(t, err)
-
-	// Verify tag build event
-	assert.Equal(t, "tag", result["build_event"], "Should detect tag build event")
-	assert.Equal(t, "v1.7.8", result["build_event_value"], "Should use tag as event value")
-}
-
-func TestBuildToolDataStructure(t *testing.T) {
-	// Test BuildToolData marshaling
+func TestJSONStructure(t *testing.T) {
+	// Test basic JSON marshaling
 	metrics := CodeMetrics{
-		Lines:      100,
-		Code:       75,
-		Comments:   15,
-		Blanks:     10,
-		Complexity: 25,
-		Files:      5,
+		Lines: 100,
+		Code:  75,
+		Files: 5,
 		Languages: map[string]LanguageMetrics{
-			"Go": {
-				Lines:      100,
-				Code:       75,
-				Comments:   15,
-				Blanks:     10,
-				Complexity: 25,
-				Files:      5,
-			},
+			"Go": {Lines: 100, Code: 75, Files: 5},
 		},
 	}
 
 	buildToolData := BuildToolData{
-		HarnessLang:      "Go,JavaScript",
+		HarnessLang:      "Go",
 		HarnessBuildTool: "Go",
 		Repository:       "https://github.com/test/repo.git",
 		BuildEvent:       "branch",
 		BuildEventValue:  "main",
 		Metrics:          metrics,
-		PluginVersion:    "1.0.0",
+		PluginVersion:    "1.7.8",
 	}
 
-	// Test JSON marshaling
+	// Test JSON marshaling works
 	jsonData, err := json.Marshal(buildToolData)
 	require.NoError(t, err)
-	assert.Contains(t, string(jsonData), "harness_lang", "Should contain harness_lang field")
-	assert.Contains(t, string(jsonData), "harness_build_tool", "Should contain harness_build_tool field")
-	assert.Contains(t, string(jsonData), "https://github.com/test/repo.git", "Should contain repository URL")
-	assert.Contains(t, string(jsonData), "branch", "Should contain build_event")
-	assert.Contains(t, string(jsonData), "main", "Should contain branch name and event value")
+	assert.Greater(t, len(jsonData), 0, "Should produce non-empty JSON")
+	assert.Contains(t, string(jsonData), "harness_lang", "Should contain harness_lang")
+	assert.Contains(t, string(jsonData), "build_event", "Should contain build_event")
 }

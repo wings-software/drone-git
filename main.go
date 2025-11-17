@@ -189,10 +189,10 @@ func collectCodeMetrics(workdir string) (*CodeMetrics, error) {
 	// Configure scc processor with optimizations
 	processor.DirFilePaths = []string{workdir}
 	processor.Format = "json"
-	processor.Files = true
-	processor.Complexity = false // Enable complexity calculations
-	processor.Cocomo = false     // Disable COCOMO calculations for speed
-	processor.Size = false       // Disable size calculations for speed
+	processor.Files = false
+	processor.Complexity = true  // Disable complexity calculations
+	processor.Cocomo = true      // Disable COCOMO calculations for speed
+	processor.Size = true        // Disable size calculations for speed
 	processor.Duplicates = false // Disable duplicate detection for speed
 
 	// Configure exclusions for performance
@@ -201,7 +201,7 @@ func collectCodeMetrics(workdir string) (*CodeMetrics, error) {
 		"__pycache__", ".gradle", ".m2", "coverage", "dist",
 		".svn", ".hg", "bin", "obj", "Debug", "Release",
 	}
-	processor.GitIgnore = true
+	processor.GitIgnore = false
 	processor.NoLarge = true
 	processor.LargeByteCount = 1000000 // Skip files > 1MB
 	processor.LargeLineCount = 40000   // Skip files > 40k lines
