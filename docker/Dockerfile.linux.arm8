@@ -17,7 +17,12 @@ RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
 
 RUN adduser -g Drone -s /bin/sh -D -u 1000 drone
 RUN echo 'drone ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/drone
+# Add enhanced binary with embedded scc and telemetry (ARM64/v8)
+COPY release/linux/arm64/drone-git /usr/local/bin/drone-git
+RUN chmod +x /usr/local/bin/drone-git
+
 USER drone:drone
 RUN chmod -R 777 /home/drone
 
-ENTRYPOINT ["/usr/local/bin/clone"]
+# Use enhanced binary (calls existing scripts + adds metrics collection)
+ENTRYPOINT ["/usr/local/bin/drone-git"]

@@ -51,6 +51,10 @@ ADD windows/* /bin/
   RUN ["C:\\Program Files\\PowerShell\\latest\\pwsh.exe","-NoLogo","-NoProfile","-Command","$stopTime=(Get-Date).AddMinutes(15); $ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; while(!(Test-Path -Path $env:PSModuleAnalysisCachePath)) { Write-Host ('Waiting for ' + $env:PSModuleAnalysisCachePath); if((Get-Date) -gt $stopTime) { throw 'timeout expired' } Start-Sleep -Seconds 6 }"]
 
 ENV POWERSHELL_TELEMETRY_OPTOUT="0"
+# Add enhanced binary with embedded scc and telemetry (Windows)
+COPY release/windows/amd64/drone-git.exe /bin/drone-git.exe
+
 SHELL ["C:\\Program Files\\PowerShell\\latest\\pwsh.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 USER ContainerUser
-CMD [ "pwsh", "C:\\bin\\clone.ps1" ]
+# Use enhanced binary (calls existing scripts + adds metrics collection)
+CMD ["C:\\bin\\drone-git.exe"]
