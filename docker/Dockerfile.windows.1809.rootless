@@ -35,7 +35,7 @@ RUN powershell -Command "New-Item -ItemType Directory -Force -Path 'C:\bin' | Ou
 COPY release/windows/amd64/drone-git.exe /bin/drone-git.exe
 
 # Create wrapper script that calls the enhanced binary for backward compatibility
-RUN powershell -Command "Set-Content -Path 'C:\bin\clone.ps1' -Value 'C:\bin\drone-git.exe $args'"
+RUN pwsh -Command "Set-Content -Path 'C:\bin\clone.ps1' -Value 'C:\bin\drone-git.exe `$args'"
 SHELL ["pwsh", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 USER ContainerUser
 # Use old entrypoint for backward compatibility (now calls enhanced binary)
