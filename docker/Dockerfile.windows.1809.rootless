@@ -31,7 +31,7 @@ USER ContainerAdministrator
 RUN setx /M PATH "%PATH%;C:\Program Files\PowerShell;C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;C:\git-lfs\git-lfs-3.7.0"
 # Add enhanced binary with embedded scc and telemetry (Windows)
 # The binary embeds all windows scripts, so we don't need to copy them separately
-RUN powershell -Command "New-Item -ItemType Directory -Force -Path 'C:\bin' | Out-Null"
+RUN pwsh -Command "New-Item -ItemType Directory -Force -Path 'C:\bin' | Out-Null"
 COPY release/windows/amd64/drone-git.exe /bin/drone-git.exe
 
 # Create wrapper script that calls the enhanced binary for backward compatibility
