@@ -17,12 +17,14 @@ RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
           /usr/local/lib/python3.8/site-packages/awscli/topics
 
 
-ADD posix/* /usr/local/bin/
-
 # Add enhanced binary with embedded scc and telemetry
+# The binary embeds all posix scripts, so we don't need to copy them separately
 COPY release/linux/amd64/drone-git /usr/local/bin/drone-git
 RUN chmod +x /usr/local/bin/drone-git
 
-# Use enhanced binary (calls existing scripts + adds metrics collection)
-ENTRYPOINT ["/usr/local/bin/drone-git"] 
+# Create symlink for backward compatibility with old entrypoints
+RUN ln -s /usr/local/bin/drone-git /usr/local/bin/clone
+
+# Use old entrypoint for backward compatibility (now points to enhanced binary)
+ENTRYPOINT ["/usr/local/bin/clone"] 
 

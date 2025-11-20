@@ -1,7 +1,6 @@
 FROM arm64v8/alpine:3.20
 RUN apk add --no-cache ca-certificates git git-lfs openssh curl perl aws-cli sudo
 
-ADD posix/* /usr/local/bin/
 RUN chmod -R 777 /etc/ssh
 
 # Remove unnecessary SSL keys
@@ -17,12 +16,16 @@ RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
 
 RUN adduser -g Drone -s /bin/sh -D -u 1000 drone
 RUN echo 'drone ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/drone
-# Add enhanced binary with embedded scc and telemetry (ARM64)
+# Add enhanced binary with embedded scc and telemetry
+# The binary embeds all posix scripts, so we don't need to copy them separately (ARM64)
 COPY release/linux/arm64/drone-git /usr/local/bin/drone-git
 RUN chmod +x /usr/local/bin/drone-git
+
+# Create symlink for backward compatibility with old entrypoints
+RUN ln -s /usr/local/bin/drone-git /usr/local/bin/clone
 
 USER drone:drone
 RUN chmod -R 777 /home/drone
 
-# Use enhanced binary (calls existing scripts + adds metrics collection)
-ENTRYPOINT ["/usr/local/bin/drone-git"]
+# Use old entrypoint for backward compatibility (now points to enhanced binary)
+ENTRYPOINT ["/usr/local/bin/clone"]
