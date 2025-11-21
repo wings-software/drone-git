@@ -55,11 +55,7 @@ ENV POWERSHELL_TELEMETRY_OPTOUT="0"
 COPY release/windows/amd64/drone-git.exe /bin/drone-git.exe
 
 # Create wrapper script that calls the enhanced binary for backward compatibility
-<<<<<<< HEAD
 RUN Set-Content -Path 'C:\bin\clone.ps1' -Value '& C:\bin\drone-git.exe @args'
-=======
-RUN powershell -Command "Set-Content -Path 'C:\bin\clone.ps1' -Value '& C:\bin\drone-git.exe @args'"
->>>>>>> origin
 SHELL ["C:\\Program Files\\PowerShell\\latest\\pwsh.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 USER ContainerUser
 # Use old entrypoint for backward compatibility (now calls enhanced binary)
