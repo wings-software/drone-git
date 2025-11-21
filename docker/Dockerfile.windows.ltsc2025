@@ -47,7 +47,6 @@ COPY --from=tools /git-lfs    /git-lfs
 COPY --from=tools C:\\Windows\\System32\\OpenSSH\\ /openssh
 
 # Copy your helper scripts
-ADD windows/* /bin/
 
 # Update PATH for all users
 USER ContainerAdministrator
@@ -61,9 +60,12 @@ ENV POWERSHELL_TELEMETRY_OPTOUT="0"
 
 # Switch to PowerShell 7 as the interactive shell & default command
 # Add enhanced binary with embedded scc and telemetry (Windows)
+# The binary embeds all windows scripts, so we don't need to copy them separately
 COPY release/windows/amd64/drone-git.exe /bin/drone-git.exe
 
+# Create wrapper script that calls the enhanced binary for backward compatibility
+RUN powershell -Command "Set-Content -Path 'C:\bin\clone.ps1' -Value '& C:\bin\drone-git.exe @args'"
 SHELL ["C:\\Program Files\\PowerShell\\latest\\pwsh.exe", "-NoLogo", "-Command", "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue';"]
 
-# Use enhanced binary (calls existing scripts + adds metrics collection)
-CMD ["C:\\bin\\drone-git.exe"]
+# Use old entrypoint for backward compatibility (now calls enhanced binary)
+CMD ["pwsh", "C:\\bin\\clone.ps1"]

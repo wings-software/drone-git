@@ -16,7 +16,6 @@ FROM mcr.microsoft.com/powershell:nanoserver-1903
 COPY --from=git /git /git
 COPY --from=git /git-lfs /git-lfs
 
-ADD windows/* /bin/
 
 # https://github.com/PowerShell/PowerShell/issues/6211#issuecomment-367477137
 USER ContainerAdministrator
@@ -24,8 +23,11 @@ RUN setx /M PATH "%PATH%;C:\Program Files\PowerShell;C:\git-lfs\git-lfs-3.7.0"
 
 
 # Add enhanced binary with embedded scc and telemetry (Windows)
+# The binary embeds all windows scripts, so we don't need to copy them separately
 COPY release/windows/amd64/drone-git.exe /bin/drone-git.exe
 
+# Create wrapper script that calls the enhanced binary for backward compatibility
+RUN powershell -Command "Set-Content -Path 'C:\bin\clone.ps1' -Value '& C:\bin\drone-git.exe @args'"
 SHELL ["pwsh", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
-# Use enhanced binary (calls existing scripts + adds metrics collection)
-CMD ["C:\\bin\\drone-git.exe"]
+# Use old entrypoint for backward compatibility (now calls enhanced binary)
+CMD ["pwsh", "C:\\bin\\clone.ps1"]
