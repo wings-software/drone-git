@@ -1,0 +1,55 @@
+# escape=`
+
+# Build stage - same as original but with cleanup
+FROM mcr.microsoft.com/windows/servercore:ltsc2025 AS tools
+SHELL ["powershell.exe", "-NoLogo", "-ExecutionPolicy", "Bypass", "-Command", "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue';"]
+
+# Install MiniGit (same as original)
+RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
+    Invoke-WebRequest -UseBasicParsing https://github.com/git-for-windows/git/releases/download/v2.39.2.windows.1/MinGit-2.39.2-64-bit.zip -OutFile git.zip ; `
+    Expand-Archive git.zip -DestinationPath C:\git ; `
+    Remove-Item git.zip -Force
+
+# Install Git LFS (same as original)
+RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
+    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-windows-amd64-v3.7.0.zip -OutFile git-lfs.zip ; `
+    Expand-Archive git-lfs.zip -DestinationPath C:\git-lfs ; `
+    Remove-Item git-lfs.zip -Force
+
+# Enable built-in OpenSSH client
+RUN Add-WindowsCapability -Online -Name OpenSSH.Client*
+
+# PowerShell stage - download PowerShell Core to avoid heavy base image
+FROM mcr.microsoft.com/windows/servercore:ltsc2025 AS powershell
+SHELL ["C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "-Command"]
+RUN $ProgressPreference = 'SilentlyContinue'; `
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12; `
+    Invoke-WebRequest -Uri "https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.zip" -OutFile C:\powershell.zip -UseBasicParsing; `
+    Expand-Archive C:\powershell.zip -DestinationPath C:\PowerShell; `
+    Remove-Item C:\powershell.zip -Force
+
+# Final stage - Use Nano Server instead of Server Core (main optimization)
+FROM mcr.microsoft.com/windows/nanoserver:ltsc2025
+
+# Environment variables (same as original)
+ENV ProgramFiles="C:\\Program Files" `
+    POWERSHELL_DISTRIBUTION_CHANNEL="PSDocker-WindowsServerCore-ltsc2025" `
+    POWERSHELL_TELEMETRY_OPTOUT="1"
+
+# Copy tools from build stages (same structure as original)
+COPY --from=powershell C:\PowerShell "$ProgramFiles\\PowerShell\\latest"
+COPY --from=tools /git /git
+COPY --from=tools /git-lfs /git-lfs
+COPY --from=tools C:\\Windows\\System32\\OpenSSH\\ /openssh
+
+# Copy PowerShell scripts
+ADD windows/* /bin/
+
+# Set PATH (same as original)
+ENV PATH="$ProgramFiles\\PowerShell\\latest;C:\\git\\cmd;C:\\git\\mingw64\\bin;C:\\git\\usr\\bin;C:\\openssh;C:\\git-lfs\\git-lfs-3.7.0;${PATH}"
+
+# Disable telemetry and set shell (same as original)
+ENV POWERSHELL_TELEMETRY_OPTOUT="0"
+SHELL ["C:\\Program Files\\PowerShell\\latest\\pwsh.exe", "-NoLogo", "-Command", "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue';"]
+
+CMD ["C:\\Program Files\\PowerShell\\latest\\pwsh.exe", "C:\\bin\\clone.ps1"]

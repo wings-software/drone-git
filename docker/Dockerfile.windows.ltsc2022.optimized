@@ -1,0 +1,44 @@
+# escape=`
+
+# Build stage - same as original but with cleanup
+FROM mcr.microsoft.com/windows/servercore:ltsc2022 AS git
+SHELL ["powershell.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+
+RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
+    Invoke-WebRequest -UseBasicParsing https://github.com/git-for-windows/git/releases/download/v2.39.2.windows.1/MinGit-2.39.2-64-bit.zip -OutFile git.zip; `
+    Expand-Archive git.zip -DestinationPath C:\git; `
+    Remove-Item git.zip -Force
+
+# Download and extract Git LFS
+RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
+    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-windows-amd64-v3.7.0.zip -OutFile git-lfs.zip; `
+    Expand-Archive git-lfs.zip -DestinationPath C:\git-lfs; `
+    Remove-Item git-lfs.zip -Force
+
+RUN Add-WindowsCapability -Online -Name OpenSSH.Client*
+
+# PowerShell stage - download PowerShell Core manually to avoid heavy base image
+FROM mcr.microsoft.com/windows/servercore:ltsc2022 AS powershell
+SHELL ["powershell.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
+    Invoke-WebRequest -UseBasicParsing https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.zip -OutFile powershell.zip; `
+    Expand-Archive powershell.zip -DestinationPath C:\PowerShell; `
+    Remove-Item powershell.zip -Force
+
+# Final stage - Use Nano Server instead of Server Core (main optimization)
+FROM mcr.microsoft.com/windows/nanoserver:ltsc2022
+
+# Copy tools from build stages (same as original)
+COPY --from=git /git /git
+COPY --from=git /git-lfs /git-lfs
+COPY --from=git C:\Windows\System32\OpenSSH\ /openssh
+COPY --from=powershell /PowerShell /PowerShell
+
+# Copy PowerShell scripts
+ADD windows/* /bin/
+
+# Set PATH (same as original)
+ENV PATH="C:\PowerShell;C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;C:\git-lfs\git-lfs-3.7.0;${PATH}"
+
+SHELL ["C:\\PowerShell\\pwsh.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+CMD [ "C:\\PowerShell\\pwsh.exe", "C:\\bin\\clone.ps1" ]
