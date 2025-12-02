@@ -1,0 +1,23 @@
+image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-rootless-optimized
+{{#if build.tags}}
+tags:
+{{#each build.tags}}
+  - {{this}}
+{{/each}}
+{{/if}}
+manifests:
+  - image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-1809-amd64-rootless-optimized
+    platform:
+      architecture: amd64
+      os: windows
+      version: 1809
+  - image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-ltsc2022-amd64-rootless-optimized
+    platform:
+      architecture: amd64
+      os: windows
+      version: ltsc2022
+  - image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-ltsc2025-amd64-rootless-optimized
+    platform:
+      architecture: amd64
+      os: windows
+      version: ltsc2025
