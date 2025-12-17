@@ -127,9 +127,8 @@ func findPowerShell() string {
 		}
 	}
 	slog.Warn("no suitable PowerShell executable found (checked: %v). Using pwsh as default", candidates)
-        return "pwsh"
+	return "pwsh"
 }
-
 
 func runGitClone() error {
 	var err error
