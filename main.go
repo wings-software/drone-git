@@ -128,6 +128,7 @@ func findPowerShell() string {
 	}
 	slog.Warn("no suitable PowerShell executable found (checked: %v). Using pwsh as default", candidates)
         return "pwsh"
+}
 
 
 func runGitClone() error {
@@ -154,11 +155,7 @@ func runGitClone() error {
 	switch runtime.GOOS {
 	case "windows":
 		// Find safe PowerShell executable
-		psExe, err := findPowerShell()
-		if err != nil {
-			return err
-		}
-
+		psExe := findPowerShell()
 		scriptPath := filepath.Join(globalTmpDir, "windows", "clone.ps1")
 		script := fmt.Sprintf(
 			"$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; %s",
