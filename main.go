@@ -116,18 +116,19 @@ func cleanupTempDir() {
 
 // findPowerShell locates a valid PowerShell executable.
 // It prioritizes PowerShell Core (pwsh) over Windows PowerShell (powershell).
-func findPowerShell() (string, error) {
+func findPowerShell() string {
 	// Define the candidates to look for
 	candidates := []string{"pwsh", "powershell", "powershell.exe"}
 
 	for _, candidate := range candidates {
 		if path, err := exec.LookPath(candidate); err == nil {
 			slog.Debug("Found PowerShell executable", "path", path)
-			return path, nil
+			return path
 		}
 	}
-	return "", fmt.Errorf("no suitable PowerShell executable found (checked: %v)", candidates)
-}
+	slog.Warn("no suitable PowerShell executable found (checked: %v). Using pwsh as default", candidates)
+        return "pwsh"
+
 
 func runGitClone() error {
 	var err error
@@ -337,11 +338,7 @@ func executeBuildToolScript(workdir string) error {
 	switch runtime.GOOS {
 	case "windows":
 		// Find safe PowerShell executable
-		psExe, err := findPowerShell()
-		if err != nil {
-			return err
-		}
-
+		psExe := findPowerShell()
 		// Execute PowerShell script from temp directory (no workspace pollution)
 		scriptPath := filepath.Join(globalTmpDir, "windows", "get-buildtool-lang.ps1")
 		cmd = exec.Command(psExe, "-File", scriptPath, workdir)
