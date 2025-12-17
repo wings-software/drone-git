@@ -114,6 +114,21 @@ func cleanupTempDir() {
 	}
 }
 
+// findPowerShell locates a valid PowerShell executable.
+// It prioritizes PowerShell Core (pwsh) over Windows PowerShell (powershell).
+func findPowerShell() (string, error) {
+	// Define the candidates to look for
+	candidates := []string{"pwsh", "powershell", "powershell.exe"}
+
+	for _, candidate := range candidates {
+		if path, err := exec.LookPath(candidate); err == nil {
+			slog.Debug("Found PowerShell executable", "path", path)
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("no suitable PowerShell executable found (checked: %v)", candidates)
+}
+
 func runGitClone() error {
 	var err error
 	// Create a unique temporary subdirectory (keep alive for script reuse in metrics)
@@ -137,11 +152,18 @@ func runGitClone() error {
 
 	switch runtime.GOOS {
 	case "windows":
+		// Find safe PowerShell executable
+		psExe, err := findPowerShell()
+		if err != nil {
+			return err
+		}
+
 		scriptPath := filepath.Join(globalTmpDir, "windows", "clone.ps1")
 		script := fmt.Sprintf(
 			"$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; %s",
 			scriptPath)
-		cmd := exec.CommandContext(ctx, "pwsh", "-Command", script)
+
+		cmd := exec.CommandContext(ctx, psExe, "-Command", script)
 		return runCmds([]*exec.Cmd{cmd}, os.Environ(), workdir, os.Stdout, os.Stderr)
 
 	case "linux", "darwin":
@@ -314,9 +336,15 @@ func executeBuildToolScript(workdir string) error {
 
 	switch runtime.GOOS {
 	case "windows":
+		// Find safe PowerShell executable
+		psExe, err := findPowerShell()
+		if err != nil {
+			return err
+		}
+
 		// Execute PowerShell script from temp directory (no workspace pollution)
 		scriptPath := filepath.Join(globalTmpDir, "windows", "get-buildtool-lang.ps1")
-		cmd = exec.Command("pwsh", "-File", scriptPath, workdir)
+		cmd = exec.Command(psExe, "-File", scriptPath, workdir)
 
 	case "linux", "darwin":
 		// Execute shell script from temp directory (no workspace pollution)
