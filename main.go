@@ -133,7 +133,12 @@ func findPowerShell() string {
 func runGitClone() error {
 	var err error
 	// Create a unique temporary subdirectory (keep alive for script reuse in metrics)
-	globalTmpDir, err = os.MkdirTemp("", "drone-git-*")
+	// Use HARNESS_WORKDIR as base directory if set, otherwise use system temp
+	baseTmpDir := ""
+	if workdir := os.Getenv("HARNESS_WORKDIR"); workdir != "" {
+		baseTmpDir = workdir
+	}
+	globalTmpDir, err = os.MkdirTemp(baseTmpDir, "drone-git-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %v", err)
 	}
@@ -463,7 +468,12 @@ func collectAndWriteMetrics(workdir string) {
 	// For tests: initialize temp directory if needed (production skips if not available)
 	if globalTmpDir == "" {
 		var err error
-		globalTmpDir, err = os.MkdirTemp("", "drone-git-test-*")
+		// Use HARNESS_WORKDIR as base directory if set, otherwise use system temp
+		baseTmpDir := ""
+		if harnessWorkdir := os.Getenv("HARNESS_WORKDIR"); harnessWorkdir != "" {
+			baseTmpDir = harnessWorkdir
+		}
+		globalTmpDir, err = os.MkdirTemp(baseTmpDir, "drone-git-test-*")
 		if err != nil {
 			slog.Warn("Failed to create temp directory for test", "error", err)
 			return
