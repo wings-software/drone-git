@@ -28,13 +28,14 @@ if ($Env:HARNESS_GIT_CONFIG_FOLDER) {
 
 # if the netrc enviornment variables exist, write
 # the netrc file.
-
 if ($Env:DRONE_NETRC_MACHINE) {
 @"
 machine $Env:DRONE_NETRC_MACHINE
 login $Env:DRONE_NETRC_USERNAME
 password $Env:DRONE_NETRC_PASSWORD
-"@ > (Join-Path $Env:USERPROFILE '_netrc');
+"@ | Out-File -FilePath (Join-Path $Env:USERPROFILE '_netrc') -Encoding ascii -NoNewline
+# Add final newline
+"`n" | Out-File -FilePath (Join-Path $Env:USERPROFILE '_netrc') -Encoding ascii -Append -NoNewline
 }
 
 # Windows-specific: Persist Git credentials by mounting _netrc from the shared path
