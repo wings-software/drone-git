@@ -18,7 +18,7 @@ RUN adduser -g Drone -s /bin/sh -D -u 1000 drone
 RUN echo 'drone ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/drone
 # Add enhanced binary with embedded scc and telemetry
 # The binary embeds all posix scripts, so we don't need to copy them separately (ARM64)
-COPY drone-git /usr/local/bin/drone-git
+COPY release/linux/arm64/drone-git /usr/local/bin/drone-git
 RUN chmod +x /usr/local/bin/drone-git
 
 # Create symlink for backward compatibility with old entrypoints
