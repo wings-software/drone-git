@@ -1,20 +1,32 @@
 FROM redhat/ubi9-minimal:9.6
 USER root
-RUN microdnf update -y --nodocs --setopt=install_weak_deps=0 && microdnf install -y --nodocs ca-certificates git tar openssh perl python3.11 python3-pip shadow-utils
-RUN pip3 install awscli
 
-RUN curl -L https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-linux-amd64-v3.7.0.tar.gz > git-lfs.tar.gz \
-    && tar -xvzf git-lfs.tar.gz && mv git-lfs-3.7.0/git-lfs /usr/local/bin/git-lfs
+RUN microdnf update -y --nodocs --setopt=install_weak_deps=0 && \
+    microdnf install -y --nodocs \
+      ca-certificates \
+      unzip \
+      git \
+      tar \
+      openssh \
+      perl \
+      shadow-utils && \
+    microdnf clean all
+
+# Install AWS CLI v2
+RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip && \
+    unzip -q awscliv2.zip && \
+    ./aws/install && \
+    rm -rf aws awscliv2.zip
+
+# Install git-lfs
+RUN curl -fsSL https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-linux-amd64-v3.7.0.tar.gz -o git-lfs.tar.gz && \
+    tar -xzf git-lfs.tar.gz && \
+    mv git-lfs-3.7.0/git-lfs /usr/local/bin/git-lfs && \
+    rm -rf git-lfs.tar.gz git-lfs-3.7.0
 
 # Remove unnecessary SSL keys
 RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
-          /usr/share/doc/perl-Net-SSLeay/examples/server_key.pem \
-          /usr/local/lib/python3.8/site-packages/awscli/examples \
-          /usr/local/lib/python3.6/site-packages/botocore/data/sts/2011-06-15/examples-1.json \
-          /usr/local/lib/python3.6/site-packages/botocore/data/iam/2010-05-08/examples-1.json \
-          /usr/local/lib/python3.8/site-packages/botocore/data/iam/2010-05-08/examples-1.json \
-          /usr/local/lib/python3.8/site-packages/botocore/data/sts/2011-06-15/examples-1.json \
-          /usr/local/lib/python3.8/site-packages/awscli/topics
+          /usr/share/doc/perl-Net-SSLeay/examples/server_key.pem
 
 
 # Add enhanced binary with embedded scc and telemetry
