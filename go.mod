@@ -1,8 +1,8 @@
 module github.com/harness/drone-git
 
-go 1.25.4
+go 1.25.7
 
-toolchain go1.25.5
+toolchain go1.25.7
 
 require (
 	github.com/boyter/scc/v3 v3.6.0
