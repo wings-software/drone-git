@@ -1,4 +1,4 @@
-FROM redhat/ubi9-minimal:latest
+FROM redhat/ubi9-minimal:9.7
 USER root
 
 RUN microdnf update -y --nodocs --setopt=install_weak_deps=0 && \
