@@ -19,10 +19,10 @@ RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o aw
     rm -rf aws awscliv2.zip
 
 # Install git-lfs
-RUN curl -fsSL https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-linux-arm64-v3.7.0.tar.gz -o git-lfs.tar.gz && \
+RUN curl -fsSL https://github.com/git-lfs/git-lfs/releases/download/v3.7.1/git-lfs-linux-arm64-v3.7.1.tar.gz -o git-lfs.tar.gz && \
     tar -xzf git-lfs.tar.gz && \
-    mv git-lfs-3.7.0/git-lfs /usr/local/bin/git-lfs && \
-    rm -rf git-lfs.tar.gz git-lfs-3.7.0
+    mv git-lfs-3.7.1/git-lfs /usr/local/bin/git-lfs && \
+    rm -rf git-lfs.tar.gz git-lfs-3.7.1
 
 RUN chmod -R 777 /etc/ssh
 
