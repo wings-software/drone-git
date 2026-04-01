@@ -12,7 +12,7 @@ RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tl
 
 # Install Git LFS (same as original)
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
-    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-windows-amd64-v3.7.0.zip -OutFile git-lfs.zip ; `
+    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.7.1/git-lfs-windows-amd64-v3.7.1.zip -OutFile git-lfs.zip ; `
     Expand-Archive git-lfs.zip -DestinationPath C:\git-lfs ; `
     Remove-Item git-lfs.zip -Force
 
@@ -46,7 +46,7 @@ COPY --from=tools C:\\Windows\\System32\\OpenSSH\\ /openssh
 ADD windows/* /bin/
 
 # Set PATH (same as original)
-ENV PATH="$ProgramFiles\\PowerShell\\latest;C:\\git\\cmd;C:\\git\\mingw64\\bin;C:\\git\\usr\\bin;C:\\openssh;C:\\git-lfs\\git-lfs-3.7.0;${PATH}"
+ENV PATH="$ProgramFiles\\PowerShell\\latest;C:\\git\\cmd;C:\\git\\mingw64\\bin;C:\\git\\usr\\bin;C:\\openssh;C:\\git-lfs\\git-lfs-3.7.1;${PATH}"
 
 # Disable telemetry and set shell (same as original)
 ENV POWERSHELL_TELEMETRY_OPTOUT="0"
