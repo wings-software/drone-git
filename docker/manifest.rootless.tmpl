@@ -1,4 +1,4 @@
-image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-rootless
+image: sapa96/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-rootless
 {{#if build.tags}}
 tags:
 {{#each build.tags}}
@@ -7,29 +7,29 @@ tags:
 {{/if}}
 manifests:
   -
-    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-linux-amd64-rootless
+    image: sapa96/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-linux-amd64-rootless
     platform:
       architecture: amd64
       os: linux
   -
-    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-linux-arm64-rootless
+    image: sapa96/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-linux-arm64-rootless
     platform:
       architecture: arm64
       os: linux
   -
-    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-1809-amd64-rootless
+    image: sapa96/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-1809-amd64-rootless
     platform:
       architecture: amd64
       os: windows
       version: 1809
   -
-    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-ltsc2022-amd64-rootless
+    image: sapa96/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-ltsc2022-amd64-rootless
     platform:
       architecture: amd64
       os: windows
       version: ltsc2022
   -
-    image: harness/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-ltsc2025-amd64-rootless
+    image: sapa96/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-ltsc2025-amd64-rootless
     platform:
       architecture: amd64
       os: windows
