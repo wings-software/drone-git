@@ -1,0 +1,35 @@
+FROM harness0.harness.io/oci/docker_artifacts/ubi9:9-rfcurated
+USER root
+
+RUN microdnf update -y --nodocs --setopt=install_weak_deps=0 && \
+    microdnf install -y --nodocs \
+      ca-certificates \
+      unzip \
+      git \
+      tar \
+      openssh \
+      perl \
+      shadow-utils && \
+    microdnf clean all
+
+# Install AWS CLI v2
+RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o awscliv2.zip && \
+    unzip -q awscliv2.zip && \
+    ./aws/install && \
+    rm -rf aws awscliv2.zip
+
+# Install git-lfs
+RUN curl -fsSL https://github.com/git-lfs/git-lfs/releases/download/v3.7.1/git-lfs-linux-arm64-v3.7.1.tar.gz -o git-lfs.tar.gz && \
+    tar -xzf git-lfs.tar.gz && \
+    mv git-lfs-3.7.1/git-lfs /usr/local/bin/git-lfs && \
+    rm -rf git-lfs.tar.gz git-lfs-3.7.1
+
+# Remove unnecessary SSL keys
+RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
+          /usr/share/doc/perl-Net-SSLeay/examples/server_key.pem
+
+COPY release/linux/arm64/drone-git /usr/local/bin/drone-git
+RUN chmod +x /usr/local/bin/drone-git
+RUN ln -s /usr/local/bin/drone-git /usr/local/bin/clone
+
+ENTRYPOINT ["/usr/local/bin/clone"]
