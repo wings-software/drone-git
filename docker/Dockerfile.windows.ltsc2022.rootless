@@ -9,7 +9,7 @@ RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tl
 
 # Download and extract Git LFS
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
-    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-windows-amd64-v3.7.0.zip -OutFile git-lfs.zip; `
+    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.7.1/git-lfs-windows-amd64-v3.7.1.zip -OutFile git-lfs.zip; `
     Expand-Archive git-lfs.zip -DestinationPath C:\git-lfs;
 
 RUN Add-WindowsCapability -Online -Name OpenSSH.Client*
@@ -31,7 +31,7 @@ RUN powershell -Command "Set-Content -Path 'C:\bin\clone.ps1' -Value '& C:\bin\d
 
 # https://github.com/PowerShell/PowerShell/issues/6211#issuecomment-367477137
 USER ContainerAdministrator
-RUN setx /M PATH "%PATH%;C:\Program Files\PowerShell;C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;C:\git-lfs\git-lfs-3.7.0"
+RUN setx /M PATH "%PATH%;C:\Program Files\PowerShell;C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;C:\git-lfs\git-lfs-3.7.1"
 SHELL ["pwsh", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 USER ContainerUser
 # Use old entrypoint for backward compatibility (now calls enhanced binary)
