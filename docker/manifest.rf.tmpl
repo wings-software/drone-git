@@ -1,4 +1,4 @@
-image: harnesssecure/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-rf
+image: harnesssecure/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}
 {{#if build.tags}}
 tags:
 {{#each build.tags}}
@@ -7,12 +7,12 @@ tags:
 {{/if}}
 manifests:
   -
-    image: harnesssecure/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-linux-amd64-rf
+    image: harnesssecure/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-linux-amd64
     platform:
       architecture: amd64
       os: linux
   -
-    image: harnesssecure/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-linux-arm64-rf
+    image: harnesssecure/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-linux-arm64
     platform:
       variant: v8
       architecture: arm64
