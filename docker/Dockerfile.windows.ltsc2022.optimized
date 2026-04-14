@@ -11,7 +11,7 @@ RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tl
 
 # Download and extract Git LFS
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
-    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.7.0/git-lfs-windows-amd64-v3.7.0.zip -OutFile git-lfs.zip; `
+    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.7.1/git-lfs-windows-amd64-v3.7.1.zip -OutFile git-lfs.zip; `
     Expand-Archive git-lfs.zip -DestinationPath C:\git-lfs; `
     Remove-Item git-lfs.zip -Force
 
@@ -38,7 +38,7 @@ COPY --from=powershell /PowerShell /PowerShell
 ADD windows/* /bin/
 
 # Set PATH (same as original)
-ENV PATH="C:\PowerShell;C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;C:\git-lfs\git-lfs-3.7.0;${PATH}"
+ENV PATH="C:\PowerShell;C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;C:\git-lfs\git-lfs-3.7.1;${PATH}"
 
 SHELL ["C:\\PowerShell\\pwsh.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 CMD [ "C:\\PowerShell\\pwsh.exe", "C:\\bin\\clone.ps1" ]
