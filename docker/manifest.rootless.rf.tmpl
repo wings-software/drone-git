@@ -14,6 +14,23 @@ manifests:
   -
     image: harnesssecure/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-linux-arm64-rootless
     platform:
-      variant: v8
       architecture: arm64
       os: linux
+  -
+    image: harnesssecure/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-1809-amd64-rootless
+    platform:
+      architecture: amd64
+      os: windows
+      version: 1809
+  -
+    image: harnesssecure/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-ltsc2022-amd64-rootless
+    platform:
+      architecture: amd64
+      os: windows
+      version: ltsc2022
+  -
+    image: harnesssecure/drone-git:{{#if build.tag}}{{trimPrefix "v" build.tag}}{{else}}latest{{/if}}-windows-ltsc2025-amd64-rootless
+    platform:
+      architecture: amd64
+      os: windows
+      version: ltsc2025
