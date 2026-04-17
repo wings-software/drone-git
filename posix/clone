@@ -74,8 +74,60 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 		ssh-keygen -p -f ${HOME}/.ssh/id_rsa -P ${DRONE_SSH_PASSPHRASE} -N ""
 	fi
 
-	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2> /dev/null
-	export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
+	# --- DEBUG START ---
+	echo "[DEBUG] ============================================"
+	echo "[DEBUG] SSH CLONE DIAGNOSTICS"
+	echo "[DEBUG] ============================================"
+	echo "[DEBUG] DRONE_NETRC_MACHINE=${DRONE_NETRC_MACHINE}"
+	echo "[DEBUG] DRONE_NETRC_PORT=${DRONE_NETRC_PORT:-22 (default)}"
+	echo "[DEBUG] SSH_PORT_FLAG=${SSH_PORT_FLAG}"
+	echo "[DEBUG] SSH_KEYSCAN_TIMEOUT_FLAG=${SSH_KEYSCAN_TIMEOUT_FLAG}"
+	echo "[DEBUG] PLUGIN_SSH_KEYSCAN_TIMEOUT=${PLUGIN_SSH_KEYSCAN_TIMEOUT}"
+	echo "[DEBUG] HOME=${HOME}"
+	echo "[DEBUG]"
+	echo "[DEBUG] --- Step 1: DNS Resolution ---"
+	nslookup ${DRONE_NETRC_MACHINE} 2>&1 || echo "[DEBUG] nslookup not available, trying getent..."
+	getent hosts ${DRONE_NETRC_MACHINE} 2>&1 || echo "[DEBUG] getent also failed — DNS resolution BROKEN"
+	echo "[DEBUG]"
+	echo "[DEBUG] --- Step 2: SSH Port Connectivity (port ${DRONE_NETRC_PORT:-22}, 5s timeout) ---"
+	timeout 5 bash -c "echo > /dev/tcp/${DRONE_NETRC_MACHINE}/${DRONE_NETRC_PORT:-22}" 2>&1 && echo "[DEBUG] RESULT: Port ${DRONE_NETRC_PORT:-22} is OPEN" || echo "[DEBUG] RESULT: Port ${DRONE_NETRC_PORT:-22} is CLOSED/UNREACHABLE — this is why ssh-keyscan hangs"
+	echo "[DEBUG]"
+	echo "[DEBUG] --- Step 3: SSH Config File Permissions ---"
+	ls -la /etc/ssh/ssh_config 2>&1 || echo "[DEBUG] /etc/ssh/ssh_config not found"
+	ls -la /etc/ssh/ssh_config.d/ 2>&1 || echo "[DEBUG] /etc/ssh/ssh_config.d/ not found"
+	echo "[DEBUG]"
+	echo "[DEBUG] --- Step 4: SSH Key Validation ---"
+	ssh-keygen -l -f ${HOME}/.ssh/id_rsa 2>&1 || echo "[DEBUG] SSH key is INVALID or unreadable"
+	echo "[DEBUG]"
+	echo "[DEBUG] --- Step 5: ssh-keyscan (10s timeout, stderr visible) ---"
+	timeout 10 ssh-keyscan -v -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2>&1
+	SSH_KEYSCAN_EXIT=$?
+	if [ ${SSH_KEYSCAN_EXIT} -eq 0 ]; then
+		echo "[DEBUG] RESULT: ssh-keyscan SUCCEEDED (exit code 0)"
+	elif [ ${SSH_KEYSCAN_EXIT} -eq 124 ]; then
+		echo "[DEBUG] RESULT: ssh-keyscan TIMED OUT after 10s (exit code 124)"
+		echo "[DEBUG] ROOT CAUSE: The host ${DRONE_NETRC_MACHINE}:${DRONE_NETRC_PORT:-22} is not reachable on SSH port"
+		echo "[DEBUG] ACTION: Check firewall/network policies allowing pod -> ${DRONE_NETRC_MACHINE}:${DRONE_NETRC_PORT:-22}"
+	else
+		echo "[DEBUG] RESULT: ssh-keyscan FAILED (exit code ${SSH_KEYSCAN_EXIT})"
+	fi
+	echo "[DEBUG]"
+	echo "[DEBUG] --- Step 6: known_hosts result ---"
+	if [ -s ${HOME}/.ssh/known_hosts ]; then
+		echo "[DEBUG] known_hosts has content (keyscan worked):"
+		cat ${HOME}/.ssh/known_hosts 2>&1
+	else
+		echo "[DEBUG] known_hosts is EMPTY — host key was NOT retrieved"
+	fi
+	echo "[DEBUG]"
+	echo "[DEBUG] --- Step 7: Direct SSH test (5s timeout) ---"
+	timeout 5 ssh -v -o StrictHostKeyChecking=no -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null ${DRONE_NETRC_MACHINE} "echo SSH_OK" 2>&1 || echo "[DEBUG] Direct SSH connection FAILED"
+	echo "[DEBUG] ============================================"
+	echo "[DEBUG] Continuing clone attempt regardless of above results..."
+	echo "[DEBUG] ============================================"
+	# --- DEBUG END ---
+
+	export GIT_SSH_COMMAND="ssh -v -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
 fi
 
 # AWS codecommit support using AWS access key & secret key
