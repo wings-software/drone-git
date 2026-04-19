@@ -74,8 +74,20 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 		ssh-keygen -p -f ${HOME}/.ssh/id_rsa -P ${DRONE_SSH_PASSPHRASE} -N ""
 	fi
 
-	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2> /dev/null
-	export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
+	KEYSCAN_ERR_FILE="${HOME}/.ssh/ssh-keyscan.err"
+	: > "${KEYSCAN_ERR_FILE}"
+
+	set +e
+	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2> "${KEYSCAN_ERR_FILE}"
+	SSH_KEYSCAN_EXIT=$?
+	set -e
+
+	if [ "${SSH_KEYSCAN_EXIT}" -eq 0 ]; then
+		export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
+	else
+		echo "[SSH-DIAG] default ssh-keyscan setup failed; using fallback SSH command" >&2
+		export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new -o KexAlgorithms=ecdh-sha2-nistp256,diffie-hellman-group14-sha256 -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
+	fi
 fi
 
 # AWS codecommit support using AWS access key & secret key
