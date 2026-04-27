@@ -74,8 +74,24 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 		ssh-keygen -p -f ${HOME}/.ssh/id_rsa -P ${DRONE_SSH_PASSPHRASE} -N ""
 	fi
 
-	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2> /dev/null
-	export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
+	# RHEL 9 FIPS mode blocks curve25519-sha256 KEX (X25519 is not NIST-approved); retry with FIPS-safe algorithms.
+	FIPS_KEX="ecdh-sha2-nistp256,ecdh-sha2-nistp384,diffie-hellman-group14-sha256"
+	FIPS_HKA="rsa-sha2-512,rsa-sha2-256,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384"
+	KEYSCAN_ERR="${HOME}/.ssh/keyscan.err"
+
+	set +e
+	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2>"${KEYSCAN_ERR}" \
+		|| ssh-keyscan -H -o "KexAlgorithms=${FIPS_KEX}" -o "HostKeyAlgorithms=${FIPS_HKA}" ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2>"${KEYSCAN_ERR}"
+	KEYSCAN_EXIT=$?
+	set -e
+
+	if [ "${KEYSCAN_EXIT}" -eq 0 ]; then
+		export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
+	else
+		echo "[SSH-DIAG] ssh-keyscan failed; falling back to StrictHostKeyChecking=accept-new" >&2
+		cat "${KEYSCAN_ERR}" >&2 || true
+		export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new -o KexAlgorithms=${FIPS_KEX} -o HostKeyAlgorithms=${FIPS_HKA} -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
+	fi
 fi
 
 # AWS codecommit support using AWS access key & secret key
