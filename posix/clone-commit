@@ -26,10 +26,10 @@ if [ -z "${DRONE_COMMIT_SHA}" ]; then
 	set -e
 	set -x
 	git fetch ${FLAGS} origin +refs/heads/${DRONE_COMMIT_BRANCH}:
-	git checkout -b ${DRONE_COMMIT_BRANCH} origin/${DRONE_COMMIT_BRANCH}
+	git checkout -B ${DRONE_COMMIT_BRANCH} origin/${DRONE_COMMIT_BRANCH}
 else
 	set -e
 	set -x
 	git fetch ${FLAGS} origin +refs/heads/${DRONE_COMMIT_BRANCH}:
-	git checkout ${DRONE_COMMIT_SHA} -b ${DRONE_COMMIT_BRANCH}
+	git checkout ${DRONE_COMMIT_SHA} -B ${DRONE_COMMIT_BRANCH}
 fi

@@ -11,7 +11,7 @@ if [ "$PLUGIN_PR_CLONE_STRATEGY" = "SourceBranch" ]; then
 	set -x
 
 	git fetch ${FLAGS} origin ${DRONE_COMMIT_REF}:
-	git checkout ${DRONE_COMMIT_SHA} -b ${DRONE_SOURCE_BRANCH}
+	git checkout ${DRONE_COMMIT_SHA} -B ${DRONE_SOURCE_BRANCH}
 	exit 0
 fi
 
@@ -19,7 +19,7 @@ fi
 
 targetRef=${DRONE_COMMIT_BRANCH}
 if [ ! -z "${DRONE_COMMIT_BEFORE}" ]; then
-	targetRef="${DRONE_COMMIT_BEFORE} -b ${DRONE_COMMIT_BRANCH}"
+	targetRef="${DRONE_COMMIT_BEFORE} -B ${DRONE_COMMIT_BRANCH}"
 fi
 
 
@@ -29,7 +29,7 @@ set -x
 git fetch ${FLAGS} origin +refs/heads/${DRONE_COMMIT_BRANCH}:
 
 if [ "$DRONE_PR_MERGE_STRATEGY_BRANCH" = "true" ]; then
-  git checkout -b ${DRONE_COMMIT_BRANCH} origin/${DRONE_COMMIT_BRANCH}
+  git checkout -B ${DRONE_COMMIT_BRANCH} origin/${DRONE_COMMIT_BRANCH}
 else
   git checkout ${targetRef}
 fi
