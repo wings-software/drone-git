@@ -26,10 +26,10 @@ if ([string]::IsNullOrEmpty($env:DRONE_COMMIT_BRANCH)) {
 # the commit is empty we clone the branch.
 if ([string]::IsNullOrEmpty($env:DRONE_COMMIT_SHA)) {
 	sf -flags ${FLAGS} -ref "+refs/heads/${Env:DRONE_COMMIT_BRANCH}"
-	Write-Host "+ git checkout -b ${Env:DRONE_COMMIT_BRANCH} origin/${Env:DRONE_COMMIT_BRANCH}";
-	iu git checkout -b ${Env:DRONE_COMMIT_BRANCH} origin/${Env:DRONE_COMMIT_BRANCH}
+	Write-Host "+ git checkout -B ${Env:DRONE_COMMIT_BRANCH} origin/${Env:DRONE_COMMIT_BRANCH}";
+	iu git checkout -B ${Env:DRONE_COMMIT_BRANCH} origin/${Env:DRONE_COMMIT_BRANCH}
 }else{
 	sf -flags ${FLAGS} -ref "+refs/heads/${Env:DRONE_COMMIT_BRANCH}"
-	Write-Host "+ git checkout ${Env:DRONE_COMMIT_SHA} -b ${Env:DRONE_COMMIT_BRANCH}"
-	iu git checkout ${Env:DRONE_COMMIT_SHA} -b ${Env:DRONE_COMMIT_BRANCH}
+	Write-Host "+ git checkout ${Env:DRONE_COMMIT_SHA} -B ${Env:DRONE_COMMIT_BRANCH}"
+	iu git checkout ${Env:DRONE_COMMIT_SHA} -B ${Env:DRONE_COMMIT_BRANCH}
 }
