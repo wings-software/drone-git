@@ -11,6 +11,12 @@ RUN microdnf update -y --nodocs --setopt=install_weak_deps=0 && \
       perl \
       shadow-utils \
       findutils && \
+    microdnf update -y --nodocs \
+      openssh openssh-clients \
+      nghttp2 libnghttp2 \
+      libarchive \
+      python3 \
+      krb5-libs && \
     microdnf clean all
 
 # Install AWS CLI v2 (official binary - no Python/pip transitive dependencies)
