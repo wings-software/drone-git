@@ -1,3 +1,10 @@
+FROM golang:1.25.9 AS git-lfs-builder
+RUN git clone --branch v3.7.1 --depth 1 https://github.com/git-lfs/git-lfs.git /src/git-lfs && \
+    cd /src/git-lfs && \
+    go get golang.org/x/crypto@v0.49.0 && \
+    go mod tidy && \
+    go build -o /usr/local/bin/git-lfs ./git-lfs.go
+
 FROM harness0.harness.io/oci/docker_artifacts/ubi9:9-rfcurated
 USER root
 
@@ -25,11 +32,7 @@ RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o aws
     ./aws/install && \
     rm -rf aws awscliv2.zip
 
-# Install git-lfs
-RUN curl -fsSL https://github.com/git-lfs/git-lfs/releases/download/v3.7.1/git-lfs-linux-amd64-v3.7.1.tar.gz -o git-lfs.tar.gz && \
-    tar -xzf git-lfs.tar.gz && \
-    mv git-lfs-3.7.1/git-lfs /usr/local/bin/git-lfs && \
-    rm -rf git-lfs.tar.gz git-lfs-3.7.1
+COPY --from=git-lfs-builder /usr/local/bin/git-lfs /usr/local/bin/git-lfs
 
 RUN chmod -R 777 /etc/ssh
 
