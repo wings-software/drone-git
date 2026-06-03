@@ -37,6 +37,9 @@ COPY release/linux/arm64/drone-git /usr/local/bin/drone-git
 RUN chmod +x /usr/local/bin/drone-git
 RUN ln -s /usr/local/bin/drone-git /usr/local/bin/clone
 
+# Restore standard /tmp perms (rfcurated base ships /tmp as 700 nobody:nobody)
+RUN chown root:root /tmp && chmod 1777 /tmp
+
 USER drone:drone
 RUN chmod -R 777 /home/drone
 
