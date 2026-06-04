@@ -31,7 +31,7 @@ RUN setx /M PATH "%PATH%;C:\Program Files\PowerShell;C:\git\cmd;C:\git\mingw64\b
 COPY release/windows/amd64/drone-git.exe /bin/drone-git.exe
 
 # Create wrapper script that calls the enhanced binary for backward compatibility
-RUN powershell -Command "Set-Content -Path 'C:\bin\clone.ps1' -Value '& C:\bin\drone-git.exe @args'"
+RUN powershell -Command "Set-Content -Path 'C:\bin\clone.ps1' -Value '& C:\bin\drone-git.exe @args; exit $LASTEXITCODE'"
 SHELL ["pwsh", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 # Keep old entrypoint format for backward compatibility
 # Users must explicitly change to drone-git.exe to get enhanced features
