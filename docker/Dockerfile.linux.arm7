@@ -1,3 +1,16 @@
+# syntax=docker/dockerfile:1
+# Stage 1: rebuild drone-git from source against an up-to-date Go toolchain so
+# the binary embeds the patched stdlib + golang.org/x/crypto (CI-23158).
+FROM golang:1.25.11 AS drone-git-builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 \
+    go build -trimpath -ldflags='-s -w' \
+        -o /out/drone-git ./
+
+# Stage 2: runtime.
 FROM arm32v6/alpine:3.21
 RUN apk add --no-cache ca-certificates git git-lfs openssh curl perl aws-cli sudo
 
@@ -5,20 +18,14 @@ RUN chmod -R 777 /etc/ssh
 
 # Remove unnecessary SSL keys
 RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
-          /usr/share/doc/perl-Net-SSLeay/examples/server_key.pem \
-          /usr/local/lib/python3.8/site-packages/awscli/examples \
-          /usr/local/lib/python3.6/site-packages/botocore/data/sts/2011-06-15/examples-1.json \
-          /usr/local/lib/python3.6/site-packages/botocore/data/iam/2010-05-08/examples-1.json \
-          /usr/local/lib/python3.8/site-packages/botocore/data/iam/2010-05-08/examples-1.json \
-          /usr/local/lib/python3.8/site-packages/botocore/data/sts/2011-06-15/examples-1.json \
-          /usr/local/lib/python3.8/site-packages/awscli/topics
+          /usr/share/doc/perl-Net-SSLeay/examples/server_key.pem
 
 
 RUN adduser -g Drone -s /bin/sh -D -u 1000 drone
 RUN echo 'drone ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/drone
 # Add enhanced binary with embedded scc and telemetry
 # The binary embeds all posix scripts, so we don't need to copy them separately (ARM v7)
-COPY release/linux/arm/v7/drone-git /usr/local/bin/drone-git
+COPY --from=drone-git-builder /out/drone-git /usr/local/bin/drone-git
 RUN chmod +x /usr/local/bin/drone-git
 
 # Create symlink for backward compatibility with old entrypoints

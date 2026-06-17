@@ -17,6 +17,12 @@ FROM golang:1.25.11 AS git-lfs-builder
 ARG GIT_LFS_VERSION=v3.7.1
 RUN git clone --depth 1 --branch ${GIT_LFS_VERSION} https://github.com/git-lfs/git-lfs.git /src
 WORKDIR /src
+# Pull patched x/* modules so the built binary doesn't embed stale crypto/net/sys/text (CI-23158).
+RUN go get golang.org/x/crypto@v0.52.0 \
+           golang.org/x/net@v0.55.0 \
+           golang.org/x/sys@v0.45.0 \
+           golang.org/x/text@v0.37.0 && \
+    go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -ldflags='-s -w' \
         -o /out/git-lfs .
