@@ -1,3 +1,31 @@
+# syntax=docker/dockerfile:1
+# Stage 1: rebuild drone-git from source against an up-to-date Go toolchain so
+# the binary embeds the patched stdlib + golang.org/x/crypto (CI-23158).
+FROM golang:1.25.11 AS drone-git-builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -trimpath -ldflags='-s -w' \
+        -o /out/drone-git ./
+
+# Stage 2: rebuild git-lfs from source under the same toolchain.
+FROM golang:1.25.11 AS git-lfs-builder
+ARG GIT_LFS_VERSION=v3.7.1
+RUN git clone --depth 1 --branch ${GIT_LFS_VERSION} https://github.com/git-lfs/git-lfs.git /src
+WORKDIR /src
+# Pull patched x/* modules so the built binary doesn't embed stale crypto/net/sys/text (CI-23158).
+RUN go get golang.org/x/crypto@v0.52.0 \
+           golang.org/x/net@v0.55.0 \
+           golang.org/x/sys@v0.45.0 \
+           golang.org/x/text@v0.37.0 && \
+    go mod tidy
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -trimpath -ldflags='-s -w' \
+        -o /out/git-lfs .
+
+# Stage 3: runtime on Harness rfcurated UBI9 base.
 FROM harness0.harness.io/oci/docker_artifacts/ubi9:9-rfcurated
 USER root
 
@@ -19,11 +47,8 @@ RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o aws
     ./aws/install && \
     rm -rf aws awscliv2.zip
 
-# Install git-lfs
-RUN curl -fsSL https://github.com/git-lfs/git-lfs/releases/download/v3.7.1/git-lfs-linux-amd64-v3.7.1.tar.gz -o git-lfs.tar.gz && \
-    tar -xzf git-lfs.tar.gz && \
-    mv git-lfs-3.7.1/git-lfs /usr/local/bin/git-lfs && \
-    rm -rf git-lfs.tar.gz git-lfs-3.7.1
+COPY --from=git-lfs-builder /out/git-lfs /usr/local/bin/git-lfs
+RUN chmod +x /usr/local/bin/git-lfs
 
 RUN chmod -R 777 /etc/ssh
 
@@ -35,7 +60,7 @@ RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
 RUN groupadd drone && adduser -g drone -s /bin/sh -u 1000 drone
 # Add enhanced binary with embedded scc and telemetry
 # The binary embeds all posix scripts, so we don't need to copy them separately
-COPY release/linux/amd64/drone-git /usr/local/bin/drone-git
+COPY --from=drone-git-builder /out/drone-git /usr/local/bin/drone-git
 RUN chmod +x /usr/local/bin/drone-git
 
 # Create symlink for backward compatibility with old entrypoints
