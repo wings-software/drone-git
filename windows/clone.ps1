@@ -49,6 +49,17 @@ if ($Env:DRONE_PERSIST_CREDS) {
     }
 }
 
+# Windows-specific: Persist Git credentials by mounting _netrc from the shared path
+# so that subsequent steps in the pipeline can use them for authenticated Git operations.
+if ($Env:DRONE_PERSIST_CREDS) {
+    $sourcePath = Join-Path $Env:USERPROFILE '_netrc';
+    $destinationPath = 'C:\addon\shared\_netrc';
+    New-Item -ItemType Directory -Path (Split-Path $destinationPath) -Force;
+    if (Test-Path -Path $sourcePath) {
+        Copy-Item -Path $sourcePath -Destination $destinationPath -Force;
+    }
+}
+
 if ($Env:DRONE_SSH_KEY) {
     if ($Env:HARNESS_GIT_CONFIG_FOLDER) {
         $SSH_DIR = Join-Path $Env:USERPROFILE ".ssh"
