@@ -50,17 +50,11 @@ if ($Env:DRONE_PERSIST_CREDS) {
 }
 
 if ($Env:DRONE_SSH_KEY) {
-    if ($Env:HARNESS_GIT_CONFIG_FOLDER) {
-        $SSH_DIR = Join-Path $Env:USERPROFILE ".ssh"
-        $SSH_KEY_PATH = Join-Path $SSH_DIR "id_rsa"
-        mkdir $SSH_DIR -Force
-        echo $Env:DRONE_SSH_KEY > $SSH_KEY_PATH
-        $Env:GIT_SSH_COMMAND="ssh -i $SSH_KEY_PATH ${Env:SSH_KEYSCAN_FLAGS} -o StrictHostKeyChecking=no"
-    } else {
-        mkdir C:\.ssh  -Force
-        echo $Env:DRONE_SSH_KEY > C:\.ssh\id_rsa
-        $Env:GIT_SSH_COMMAND="ssh -i C:/.ssh/id_rsa ${Env:SSH_KEYSCAN_FLAGS} -o StrictHostKeyChecking=no"
-    }
+    $SSH_DIR = Join-Path $Env:USERPROFILE ".ssh"
+    $SSH_KEY_PATH = Join-Path $SSH_DIR "id_rsa"
+    mkdir $SSH_DIR -Force
+    [System.IO.File]::WriteAllText($SSH_KEY_PATH, $Env:DRONE_SSH_KEY)
+    $Env:GIT_SSH_COMMAND="ssh -i $SSH_KEY_PATH ${Env:SSH_KEYSCAN_FLAGS} -o StrictHostKeyChecking=no"
 }
 
 # configure git global behavior and parameters via the
