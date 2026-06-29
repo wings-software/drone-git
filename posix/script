@@ -1,3 +1,2 @@
 dir=$(dirname "$0")
-export PATH=$dir:$PATH
-clone
+sh "$dir/clone"
