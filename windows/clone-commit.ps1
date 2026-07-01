@@ -15,7 +15,13 @@ if ($Env:PLUGIN_DEPTH) {
 # we intentially omit depth flags to avoid failed
 # clones due to lack of history.
 if ([string]::IsNullOrEmpty($env:DRONE_COMMIT_BRANCH)) {
-	sf -flags $null -ref $null
+	Write-Host "+ git fetch origin ${Env:DRONE_COMMIT_SHA}"
+    try {
+        iu git fetch origin ${Env:DRONE_COMMIT_SHA}
+    } catch {
+        Write-Host "+ git fetch origin"
+        iu git fetch origin
+    }
 	Write-Host "+ git checkout -qf ${Env:DRONE_COMMIT_SHA}";
 	iu git checkout -qf ${Env:DRONE_COMMIT_SHA}
 	exit 0
