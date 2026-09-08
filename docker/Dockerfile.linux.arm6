@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Stage 1: rebuild drone-git from source against an up-to-date Go toolchain so
 # the binary embeds the patched stdlib + golang.org/x/crypto (CI-23158).
-FROM golang:1.25.11 AS drone-git-builder
+FROM golang:1.25.13 AS drone-git-builder
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
