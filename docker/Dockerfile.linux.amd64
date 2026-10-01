@@ -26,35 +26,95 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -ldflags='-s -w' \
         -o /out/git-lfs .
 
-# Stage 3: runtime. ubi10-minimal:10.2 ships openssl-libs 3.5.5-4.el10_2
-# (resolves CVE-2026-45447) and refreshed perl/git RPMs.
-FROM redhat/ubi10-minimal:10.2
+# Declared as a named stage so rootfs-builder can seed /mnt/rootfs from it
+# below.
+FROM redhat/ubi10-micro:10.2 AS micro-base
+
+# Stage 3: runtime rootfs assembly. ubi10-micro ships no package manager, so
+# ubi10-minimal is a builder here, not the runtime base.
+FROM redhat/ubi10-minimal:10.2 AS rootfs-builder
 USER root
 
-RUN microdnf update -y --nodocs --setopt=install_weak_deps=0 && \
-    microdnf install -y --nodocs \
-      ca-certificates \
-      unzip \
-      git \
-      tar \
-      openssh \
-      perl \
-      shadow-utils && \
-    microdnf clean all
+# Seed the install root with micro's whole filesystem, rpmdb included, so
+# microdnf sees micro's baseline as already installed and updates it instead
+# of skipping it.
+RUN mkdir -p /mnt/rootfs
+COPY --from=micro-base / /mnt/rootfs/
 
-# Install AWS CLI v2 (official binary - no Python/pip transitive dependencies)
-RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip && \
-    unzip -q awscliv2.zip && \
-    ./aws/install && \
-    rm -rf aws awscliv2.zip
+RUN microdnf update --installroot /mnt/rootfs \
+      --config /etc/dnf/dnf.conf --noplugins \
+      --setopt=cachedir=/var/cache/microdnf-installroot \
+      --setopt=reposdir=/etc/yum.repos.d \
+      --setopt=varsdir=/etc/dnf/vars \
+      --nodocs --setopt=install_weak_deps=0 -y \
+  && microdnf install --installroot /mnt/rootfs \
+      --config /etc/dnf/dnf.conf --noplugins \
+      --setopt=cachedir=/var/cache/microdnf-installroot \
+      --setopt=reposdir=/etc/yum.repos.d \
+      --setopt=varsdir=/etc/dnf/vars \
+      --nodocs --setopt=install_weak_deps=0 -y \
+    ca-certificates \
+    git-core \
+    tar \
+    openssh-clients \
+  && microdnf --installroot /mnt/rootfs \
+      --config /etc/dnf/dnf.conf --noplugins \
+      --setopt=cachedir=/var/cache/microdnf-installroot \
+      --setopt=reposdir=/etc/yum.repos.d \
+      --setopt=varsdir=/etc/dnf/vars \
+      clean all \
+  && rm -rf /mnt/rootfs/var/cache/yum
+
+# git-core (not the full git metapackage): the embedded posix scripts
+# (posix/common, posix/clone*) only ever call plumbing (init, fetch,
+# checkout, submodule update, sparse-checkout, lfs install, config, remote),
+# none of which need perl-Git or the Perl interpreter it drags in. Unlike
+# ci-addon, this image genuinely shells out to the OS ssh client
+# (GIT_SSH_COMMAND, ssh-keyscan, ssh-keygen in posix/common), so
+# openssh-clients is a real runtime dependency here, not stripped.
+#
+# shadow-utils and perl, present in the pre-migration Dockerfile, are
+# dropped: nothing in this image creates a user (it runs as root, same as
+# before) or calls perl (grep across posix/*, windows/*, main.go: no hits).
+# unzip is build-time only, for extracting the AWS CLI installer below, so
+# it's installed into rootfs-builder's own filesystem, not --installroot.
+
+# Install AWS CLI v2 (official binary - no Python/pip transitive
+# dependencies) straight into the installroot: posix/common's credential
+# helper (`git config --global credential.helper '!aws codecommit
+# credential-helper $@'`) depends on it at runtime.
+WORKDIR /downloads
+# aws/install's symlinks (both the bin/aws, bin/aws_completer launchers and
+# the internal v2/current version link) point at the literal -i/-b paths
+# given on the command line, so installing straight into /mnt/rootfs/...
+# bakes /mnt/rootfs-prefixed targets into the shipped rootfs -- which 404
+# once copied to the final image's /. Sweep every symlink under the install
+# tree afterward and strip the /mnt/rootfs prefix back off.
+RUN microdnf install -y --nodocs unzip \
+  && curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip \
+  && unzip -q awscliv2.zip \
+  && ./aws/install -i /mnt/rootfs/usr/local/aws-cli -b /mnt/rootfs/usr/local/bin \
+  && find /mnt/rootfs/usr/local/aws-cli /mnt/rootfs/usr/local/bin -type l | while read -r link; do \
+       target=$(readlink "$link"); \
+       case "$target" in /mnt/rootfs/*) ln -sfn "${target#/mnt/rootfs}" "$link" ;; esac; \
+     done \
+  && rm -rf aws awscliv2.zip
+
+# Remove unnecessary SSL keys
+RUN rm -rf /mnt/rootfs/usr/share/doc/perl-IO-Socket-SSL \
+          /mnt/rootfs/usr/share/doc/perl-Net-SSLeay/examples/server_key.pem
+
+# FROM scratch, not micro-base: COPY only adds/overwrites, it never deletes,
+# so layering the updated rootfs onto micro-base would let any file the
+# update removed survive underneath while the overlaid rpmdb reports it
+# gone. rootfs-builder already seeded /mnt/rootfs from all of micro-base
+# plus the update, so it is the whole filesystem, not a diff.
+FROM scratch
+
+COPY --from=rootfs-builder /mnt/rootfs/ /
 
 COPY --from=git-lfs-builder /out/git-lfs /usr/local/bin/git-lfs
 RUN chmod +x /usr/local/bin/git-lfs
-
-# Remove unnecessary SSL keys
-RUN rm -rf /usr/share/doc/perl-IO-Socket-SSL \
-          /usr/share/doc/perl-Net-SSLeay/examples/server_key.pem
-
 
 # Add enhanced binary with embedded scc and telemetry
 # The binary embeds all posix scripts, so we don't need to copy them separately
