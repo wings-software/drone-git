@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Stage 1: rebuild drone-git from source against an up-to-date Go toolchain so
 # the binary embeds the patched stdlib + golang.org/x/crypto (CI-23158).
-FROM golang:1.25.11 AS drone-git-builder
+FROM harness0.harness.io/oci/docker_artifacts/golang:1.25.11 AS drone-git-builder
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -12,7 +12,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 
 # Stage 2: rebuild git-lfs from source under the same toolchain. The upstream
 # release tarball ships a stale go stdlib that drives several criticals.
-FROM golang:1.25.11 AS git-lfs-builder
+FROM harness0.harness.io/oci/docker_artifacts/golang:1.25.11 AS git-lfs-builder
 ARG GIT_LFS_VERSION=v3.7.1
 RUN git clone --depth 1 --branch ${GIT_LFS_VERSION} https://github.com/git-lfs/git-lfs.git /src
 WORKDIR /src
@@ -28,11 +28,11 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 
 # Declared as a named stage so rootfs-builder can seed /mnt/rootfs from it
 # below.
-FROM redhat/ubi10-micro:10.2 AS micro-base
+FROM harness0.harness.io/oci/docker_artifacts/redhat/ubi10-micro:10.2 AS micro-base
 
 # Stage 3: runtime rootfs assembly. ubi10-micro ships no package manager, so
 # ubi10-minimal is a builder here, not the runtime base.
-FROM redhat/ubi10-minimal:10.2 AS rootfs-builder
+FROM harness0.harness.io/oci/docker_artifacts/redhat/ubi10-minimal:10.2 AS rootfs-builder
 USER root
 
 # Seed the install root with micro's whole filesystem, rpmdb included, so
