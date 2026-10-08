@@ -46,6 +46,24 @@ if (!(Test-Path .git)) {
 
     Write-Host "+ git remote add origin $Env:DRONE_REMOTE_URL"
     iu git remote add origin $Env:DRONE_REMOTE_URL
+
+    # borrow objects from a local reference repository when one is usable,
+    # equivalent to clone --reference-if-able. accepts either a working tree
+    # or a bare repository, and is skipped when the path is not a repository.
+    if ($Env:PLUGIN_REFERENCE_REPO) {
+        $alternates = ""
+        if (Test-Path (Join-Path $Env:PLUGIN_REFERENCE_REPO '.git\objects')) {
+            $alternates = (Resolve-Path (Join-Path $Env:PLUGIN_REFERENCE_REPO '.git\objects')).Path.Replace('\', '/')
+        } elseif (Test-Path (Join-Path $Env:PLUGIN_REFERENCE_REPO 'objects')) {
+            $alternates = (Resolve-Path (Join-Path $Env:PLUGIN_REFERENCE_REPO 'objects')).Path.Replace('\', '/')
+        }
+        if ($alternates) {
+            Write-Host "[INFO] borrowing objects from $alternates"
+            Set-Content -Path .git\objects\info\alternates -Value $alternates -Encoding ascii
+        } else {
+            Write-Host "[INFO] skipping reference repository ${Env:PLUGIN_REFERENCE_REPO}: not a git repository"
+        }
+    }
 } else {
     Write-Host "+ git config --global --add safe.directory *"
     iu git config --global --add safe.directory '*'
