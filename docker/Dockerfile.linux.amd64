@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Stage 1: rebuild drone-git from source against an up-to-date Go toolchain so
 # the binary embeds the patched stdlib + golang.org/x/crypto (CI-23158).
-FROM harness0.harness.io/oci/docker_artifacts/golang:1.25.11 AS drone-git-builder
+FROM harness0.harness.io/oci/docker_artifacts/golang:1.25.13 AS drone-git-builder
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -12,7 +12,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 
 # Stage 2: rebuild git-lfs from source under the same toolchain. The upstream
 # release tarball ships a stale go stdlib that drives several criticals.
-FROM harness0.harness.io/oci/docker_artifacts/golang:1.25.11 AS git-lfs-builder
+FROM harness0.harness.io/oci/docker_artifacts/golang:1.25.13 AS git-lfs-builder
 ARG GIT_LFS_VERSION=v3.7.1
 RUN git clone --depth 1 --branch ${GIT_LFS_VERSION} https://github.com/git-lfs/git-lfs.git /src
 WORKDIR /src
@@ -20,7 +20,7 @@ WORKDIR /src
 RUN go get golang.org/x/crypto@v0.52.0 \
            golang.org/x/net@v0.55.0 \
            golang.org/x/sys@v0.45.0 \
-           golang.org/x/text@v0.37.0 && \
+           golang.org/x/text@v0.39.0 && \
     go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -ldflags='-s -w' \
