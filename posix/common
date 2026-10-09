@@ -38,15 +38,16 @@ if [ ! -d .git ]; then
   # borrow objects from a local reference repository when one is usable,
   # equivalent to clone --reference-if-able. accepts either a working tree
   # or a bare repository, and is skipped when the path is not a repository.
-  if [ -n "${PLUGIN_REFERENCE_REPO}" ]; then
+  REFERENCE_REPO="${PLUGIN_REFERENCE_REPO:-/mnt/cache/repo}"
+  if [ -n "${REFERENCE_REPO}" ]; then
     ALTERNATES=""
-    if [ -d "${PLUGIN_REFERENCE_REPO}/.git/objects" ]; then
-      ALTERNATES=$(cd "${PLUGIN_REFERENCE_REPO}/.git/objects" && pwd)
-    elif [ -d "${PLUGIN_REFERENCE_REPO}/objects" ]; then
-      ALTERNATES=$(cd "${PLUGIN_REFERENCE_REPO}/objects" && pwd)
+    if [ -d "${REFERENCE_REPO}/.git/objects" ]; then
+      ALTERNATES=$(cd "${REFERENCE_REPO}/.git/objects" && pwd)
+    elif [ -d "${REFERENCE_REPO}/objects" ]; then
+      ALTERNATES=$(cd "${REFERENCE_REPO}/objects" && pwd)
     fi
     if [ -z "${ALTERNATES}" ]; then
-      echo "[INFO] skipping reference repository ${PLUGIN_REFERENCE_REPO}: not a git repository"
+      echo "[INFO] skipping reference repository ${REFERENCE_REPO}: not a git repository"
     else
       echo "[INFO] borrowing objects from ${ALTERNATES}"
       echo "${ALTERNATES}" > .git/objects/info/alternates
