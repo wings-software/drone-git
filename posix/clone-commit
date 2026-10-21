@@ -5,6 +5,12 @@ if [ ! -z "${PLUGIN_DEPTH}" ]; then
 	FLAGS="--depth=${PLUGIN_DEPTH}"
 fi
 
+if [ ! -d .git ]; then
+	git init
+	git config --global --add safe.directory '*'
+	git remote add origin ${DRONE_REMOTE_URL}
+fi
+
 # the branch may be empty for certain event types,
 # such as github deployment events. If the branch
 # is empty we checkout the sha directly. Note that
