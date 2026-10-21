@@ -37,7 +37,7 @@ func TestCommits(t *testing.T) {
 
 		cmd := exec.Command(bin)
 		cmd.Dir = local
-		cmd.Env = cleanEnv(
+		cmd.Env = append(os.Environ(),
 			fmt.Sprintf("DRONE_COMMIT_BRANCH=%s", test.branch),
 			fmt.Sprintf("DRONE_COMMIT_SHA=%s", test.commit),
 			fmt.Sprintf("DRONE_WORKSPACE=%s", local),
@@ -115,7 +115,7 @@ func TestTags(t *testing.T) {
 
 		cmd := exec.Command(bin)
 		cmd.Dir = local
-		cmd.Env = cleanEnv(
+		cmd.Env = append(os.Environ(),
 			fmt.Sprintf("DRONE_TAG=%s", test.tag),
 			fmt.Sprintf("DRONE_COMMIT_SHA=%s", test.commit),
 			fmt.Sprintf("DRONE_WORKSPACE=%s", local),
@@ -175,7 +175,7 @@ func TestPullRequest(t *testing.T) {
 
 	cmd := exec.Command(bin)
 	cmd.Dir = local
-	cmd.Env = cleanEnv(
+	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("DRONE_COMMIT_REF=%s", "refs/pull/14596/head"),
 		fmt.Sprintf("DRONE_COMMIT_BRANCH=%s", "main"),
 		fmt.Sprintf("DRONE_COMMIT_SHA=%s", "26923a8f37933ccc23943de0d4ebd53908268582"),
@@ -220,16 +220,6 @@ func TestPullRequest(t *testing.T) {
 		t.Error(err)
 		return
 	}
-}
-
-func cleanEnv(extra ...string) []string {
-	var env []string
-	for _, e := range os.Environ() {
-		if !strings.HasPrefix(e, "DRONE_") && !strings.HasPrefix(e, "PLUGIN_") {
-			env = append(env, e)
-		}
-	}
-	return append(env, extra...)
 }
 
 func initGit(dir, remote string) {
