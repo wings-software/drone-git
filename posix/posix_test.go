@@ -27,7 +27,6 @@ func TestCommits(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		initGit(local, remote)
 
 		bin, err := filepath.Abs("clone-commit")
 		if err != nil {
@@ -37,16 +36,12 @@ func TestCommits(t *testing.T) {
 
 		cmd := exec.Command(bin)
 		cmd.Dir = local
-		cmd.Env = append(os.Environ(),
+		cmd.Env = []string{
 			fmt.Sprintf("DRONE_COMMIT_BRANCH=%s", test.branch),
 			fmt.Sprintf("DRONE_COMMIT_SHA=%s", test.commit),
 			fmt.Sprintf("DRONE_WORKSPACE=%s", local),
 			fmt.Sprintf("DRONE_REMOTE_URL=%s", remote),
-			"GIT_AUTHOR_NAME=drone",
-			"GIT_AUTHOR_EMAIL=drone@localhost",
-			"GIT_COMMITTER_NAME=drone",
-			"GIT_COMMITTER_EMAIL=drone@localhost",
-		)
+		}
 
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -105,7 +100,6 @@ func TestTags(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		initGit(local, remote)
 
 		bin, err := filepath.Abs("clone-tag")
 		if err != nil {
@@ -115,16 +109,12 @@ func TestTags(t *testing.T) {
 
 		cmd := exec.Command(bin)
 		cmd.Dir = local
-		cmd.Env = append(os.Environ(),
+		cmd.Env = []string{
 			fmt.Sprintf("DRONE_TAG=%s", test.tag),
 			fmt.Sprintf("DRONE_COMMIT_SHA=%s", test.commit),
 			fmt.Sprintf("DRONE_WORKSPACE=%s", local),
 			fmt.Sprintf("DRONE_REMOTE_URL=%s", remote),
-			"GIT_AUTHOR_NAME=drone",
-			"GIT_AUTHOR_EMAIL=drone@localhost",
-			"GIT_COMMITTER_NAME=drone",
-			"GIT_COMMITTER_EMAIL=drone@localhost",
-		)
+		}
 
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -165,7 +155,6 @@ func TestPullRequest(t *testing.T) {
 		return
 	}
 	defer os.Remove(local)
-	initGit(local, remote)
 
 	bin, err := filepath.Abs("clone-pull-request")
 	if err != nil {
@@ -175,17 +164,13 @@ func TestPullRequest(t *testing.T) {
 
 	cmd := exec.Command(bin)
 	cmd.Dir = local
-	cmd.Env = append(os.Environ(),
+	cmd.Env = []string{
 		fmt.Sprintf("DRONE_COMMIT_REF=%s", "refs/pull/14596/head"),
 		fmt.Sprintf("DRONE_COMMIT_BRANCH=%s", "main"),
 		fmt.Sprintf("DRONE_COMMIT_SHA=%s", "26923a8f37933ccc23943de0d4ebd53908268582"),
 		fmt.Sprintf("DRONE_WORKSPACE=%s", local),
 		fmt.Sprintf("DRONE_REMOTE_URL=%s", remote),
-		"GIT_AUTHOR_NAME=drone",
-		"GIT_AUTHOR_EMAIL=drone@localhost",
-		"GIT_COMMITTER_NAME=drone",
-		"GIT_COMMITTER_EMAIL=drone@localhost",
-	)
+	}
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -220,24 +205,6 @@ func TestPullRequest(t *testing.T) {
 		t.Error(err)
 		return
 	}
-}
-
-func initGit(dir, remote string) {
-	cmd := exec.Command("git", "init")
-	cmd.Dir = dir
-	_ = cmd.Run()
-	cmd = exec.Command("git", "config", "user.email", "drone@localhost")
-	cmd.Dir = dir
-	_ = cmd.Run()
-	cmd = exec.Command("git", "config", "user.name", "drone")
-	cmd.Dir = dir
-	_ = cmd.Run()
-	cmd = exec.Command("git", "config", "--global", "--add", "safe.directory", "*")
-	cmd.Dir = dir
-	_ = cmd.Run()
-	cmd = exec.Command("git", "remote", "add", "origin", remote)
-	cmd.Dir = dir
-	_ = cmd.Run()
 }
 
 func getBranch(path string) (string, error) {

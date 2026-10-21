@@ -5,19 +5,6 @@ if [ ! -z "${PLUGIN_DEPTH}" ]; then
 	FLAGS="--depth=${PLUGIN_DEPTH}"
 fi
 
-if [ ! -d .git ]; then
-	git init
-	git config --global --add safe.directory '*'
-	git remote add origin ${DRONE_REMOTE_URL}
-fi
-
-if [ -z "${GIT_AUTHOR_NAME}" ]; then
-	export GIT_AUTHOR_NAME=drone
-	export GIT_AUTHOR_EMAIL=drone@localhost
-	export GIT_COMMITTER_NAME=drone
-	export GIT_COMMITTER_EMAIL=drone@localhost
-fi
-
 # If PR clone strategy is cloning only the source branch
 if [ "$PLUGIN_PR_CLONE_STRATEGY" = "SourceBranch" ]; then
 	set -e
