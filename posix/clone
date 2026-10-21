@@ -81,17 +81,29 @@ if [ ! -z "${DRONE_SSH_KEY}" ]; then
 	FIPS_HKA="rsa-sha2-512,rsa-sha2-256,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384"
 	KEYSCAN_ERR="${HOME}/.ssh/keyscan.err"
 
+	FIPS_SSH_OPTS=""
 	set +e
-	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2>"${KEYSCAN_ERR}" \
-		|| ssh-keyscan -H -o "KexAlgorithms=${FIPS_KEX}" -o "HostKeyAlgorithms=${FIPS_HKA}" ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2>"${KEYSCAN_ERR}"
+	ssh-keyscan -H ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2>"${KEYSCAN_ERR}"
 	KEYSCAN_EXIT=$?
+	if [ "${KEYSCAN_EXIT}" -ne 0 ]; then
+		FIPS_KEYSCAN_ERR="${HOME}/.ssh/keyscan.fips.err"
+		ssh-keyscan -H -o "KexAlgorithms=${FIPS_KEX}" -o "HostKeyAlgorithms=${FIPS_HKA}" ${SSH_PORT_FLAG} ${SSH_KEYSCAN_TIMEOUT_FLAG} ${DRONE_NETRC_MACHINE} > ${HOME}/.ssh/known_hosts 2>"${FIPS_KEYSCAN_ERR}"
+		KEYSCAN_EXIT=$?
+		if [ "${KEYSCAN_EXIT}" -eq 0 ]; then
+			# Default key exchange failed but FIPS-safe algorithms worked (e.g. FIPS-mode nodes); carry them into the clone as well (CI-25191)
+			FIPS_SSH_OPTS="-o KexAlgorithms=${FIPS_KEX} -o HostKeyAlgorithms=${FIPS_HKA}"
+			echo "[SSH-DIAG] default key exchange failed; using FIPS-safe algorithms (KexAlgorithms=${FIPS_KEX})" >&2
+		else
+			cat "${KEYSCAN_ERR}" >&2 || true
+			cat "${FIPS_KEYSCAN_ERR}" >&2 || true
+		fi
+	fi
 	set -e
 
 	if [ "${KEYSCAN_EXIT}" -eq 0 ]; then
-		export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
+		export GIT_SSH_COMMAND="ssh ${FIPS_SSH_OPTS} -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
 	else
 		echo "[SSH-DIAG] ssh-keyscan failed; falling back to StrictHostKeyChecking=accept-new" >&2
-		cat "${KEYSCAN_ERR}" >&2 || true
 		export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new -o KexAlgorithms=${FIPS_KEX} -o HostKeyAlgorithms=${FIPS_HKA} -o UserKnownHostsFile=${HOME}/.ssh/known_hosts -i ${HOME}/.ssh/id_rsa ${SSH_PORT_FLAG} -F /dev/null"
 	fi
 fi
