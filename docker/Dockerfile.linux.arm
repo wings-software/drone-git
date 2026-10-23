@@ -1,13 +1,11 @@
 # syntax=docker/dockerfile:1
 # Stage 1: rebuild drone-git from source against an up-to-date Go toolchain so
 # the binary embeds the patched stdlib + golang.org/x/crypto (CI-23158).
-FROM --platform=$BUILDPLATFORM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1 AS hhi-arm-certificates
+FROM alpine:3.24 AS patched-arm-certificates
 RUN apk add --no-cache 'ca-certificates>=20261020-r0'
 
-FROM --platform=$BUILDPLATFORM harness0.harness.io/oci/docker_artifacts/hhi/go:1.26.10 AS hhi-go-toolchain-0
-FROM --platform=$BUILDPLATFORM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1 AS drone-git-builder
-COPY --from=hhi-go-toolchain-0 /usr/lib/go /usr/lib/go
-ENV PATH=/usr/lib/go/bin:$PATH GOPATH=/go GOTOOLCHAIN=local
+FROM golang:1.26.10-alpine AS drone-git-builder
+ENV PATH=/usr/local/go/bin:$PATH GOPATH=/go GOTOOLCHAIN=local
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -19,6 +17,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 \
 # Stage 2: runtime. git-lfs comes from the apk repo so its patches flow with
 # `apk add` and we don't need a parallel git-lfs build stage.
 FROM arm32v6/alpine:3.21
+COPY --from=patched-arm-certificates /etc/ssl/certs/ca-certificates.crt /etc/patched-ca/certs/ca-certificates.crt
+ENV SSL_CERT_FILE=/etc/patched-ca/certs/ca-certificates.crt SSL_CERT_DIR=/etc/patched-ca/certs
 RUN apk add --no-cache 'ca-certificates>=20261020-r0' git git-lfs openssh curl perl aws-cli sudo
 
 RUN chmod -R 777 /etc/ssh
@@ -45,4 +45,4 @@ RUN chmod -R 777 /home/drone
 ENTRYPOINT ["/usr/local/bin/clone"]
 
 # CA bundles are architecture-independent; use the patched HHI roots on legacy ARM.
-COPY --from=hhi-arm-certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=patched-arm-certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt

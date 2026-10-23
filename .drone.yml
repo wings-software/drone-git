@@ -77,7 +77,7 @@ platform:
 
 steps:
 - name: build
-  image: harness0.harness.io/oci/docker_artifacts/hhi/go:1.26.10
+  image: golang:1.26.10-alpine
   commands:
   - cd posix
   - tar -xf fixtures.tar -C /

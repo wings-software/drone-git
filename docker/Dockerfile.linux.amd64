@@ -4,7 +4,11 @@
 FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1 AS hhi-ca-certificates
 RUN apk add --no-cache 'ca-certificates>=20261020-r0'
 
-FROM harness0.harness.io/oci/docker_artifacts/hhi/go:1.26.10 AS drone-git-builder
+FROM harness0.harness.io/oci/docker_artifacts/hhi/go:1.26.10 AS hhi-build-sdk-1
+FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1 AS drone-git-builder
+COPY --from=hhi-build-sdk-1 /usr/lib/go /usr/lib/go
+ENV PATH=/usr/lib/go/bin:$PATH GOPATH=/go GOTOOLCHAIN=local
+RUN apk add --no-cache git bash curl wget make build-base 'ca-certificates>=20261020-r0'
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -36,6 +40,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 # Stage 3: runtime. ubi10-minimal:10.2 ships openssl-libs 3.5.5-4.el10_2
 # (resolves CVE-2026-45447) and refreshed perl/git RPMs.
 FROM redhat/ubi10-minimal:10.2
+COPY --from=hhi-ca-certificates /etc/ssl/certs/ca-certificates.crt /etc/hhi/certs/ca-certificates.crt
+ENV SSL_CERT_FILE=/etc/hhi/certs/ca-certificates.crt SSL_CERT_DIR=/etc/hhi/certs
 USER root
 
 RUN microdnf update -y --nodocs --setopt=install_weak_deps=0 && \
@@ -76,4 +82,3 @@ ENTRYPOINT ["/usr/local/bin/clone"]
 
 # Supply the incident-patched system roots from the HHI package.
 COPY --from=hhi-ca-certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
