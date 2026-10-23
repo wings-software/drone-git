@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Stage 1: rebuild drone-git from source against an up-to-date Go toolchain
 # so the binary embeds the patched stdlib + golang.org/x/crypto (CI-23158).
-FROM golang:1.27.3 AS drone-git-builder
+FROM harness0.harness.io/oci/docker_artifacts/golang:1.27.3 AS drone-git-builder
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -11,7 +11,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
         -o /out/drone-git ./
 
 # Stage 2: rebuild git-lfs from source under the same toolchain.
-FROM golang:1.27.3 AS git-lfs-builder
+FROM harness0.harness.io/oci/docker_artifacts/golang:1.27.3 AS git-lfs-builder
 ARG GIT_LFS_VERSION=v3.7.1
 RUN git clone --depth 1 --branch ${GIT_LFS_VERSION} https://github.com/git-lfs/git-lfs.git /src
 WORKDIR /src
@@ -26,7 +26,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
         -o /out/git-lfs .
 
 # Stage 3: runtime on ubi10-minimal:10.2 for refreshed RPM CVE coverage.
-FROM redhat/ubi10-minimal:10.2
+FROM harness0.harness.io/oci/docker_artifacts/redhat/ubi10-minimal:10.2
 
 RUN microdnf update -y --nodocs --setopt=install_weak_deps=0 && \
     microdnf install -y --nodocs \
