@@ -11,7 +11,7 @@ platform:
 
 steps:
 - name: build
-  image: golang:1.22
+  image: harness0.harness.io/oci/docker_artifacts/hhi/go:1.26.10
   commands:
   - cd posix
   - tar -xf fixtures.tar -C /
@@ -44,7 +44,7 @@ platform:
 
 steps:
 - name: build
-  image: golang:1.22
+  image: harness0.harness.io/oci/docker_artifacts/hhi/go:1.26.10
   commands:
   - cd posix
   - tar -xf fixtures.tar -C /
@@ -77,7 +77,7 @@ platform:
 
 steps:
 - name: build
-  image: golang:1.22
+  image: harness0.harness.io/oci/docker_artifacts/hhi/go:1.26.10
   commands:
   - cd posix
   - tar -xf fixtures.tar -C /

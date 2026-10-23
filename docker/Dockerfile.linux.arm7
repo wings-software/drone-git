@@ -1,7 +1,10 @@
 # syntax=docker/dockerfile:1
 # Stage 1: rebuild drone-git from source against an up-to-date Go toolchain so
 # the binary embeds the patched stdlib + golang.org/x/crypto (CI-23158).
-FROM golang:1.25.11 AS drone-git-builder
+FROM --platform=$BUILDPLATFORM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1 AS hhi-arm-certificates
+RUN apk add --no-cache 'ca-certificates>=20261020-r0'
+
+FROM --platform=$BUILDPLATFORM harness0.harness.io/oci/docker_artifacts/hhi/go:1.26.10 AS drone-git-builder
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -12,7 +15,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 \
 
 # Stage 2: runtime.
 FROM arm32v6/alpine:3.21
-RUN apk add --no-cache ca-certificates git git-lfs openssh curl perl aws-cli sudo
+RUN apk add --no-cache 'ca-certificates>=20261020-r0' git git-lfs openssh curl perl aws-cli sudo
 
 RUN chmod -R 777 /etc/ssh
 
@@ -36,3 +39,6 @@ RUN chmod -R 777 /home/drone
 
 # Use old entrypoint for backward compatibility (now points to enhanced binary)
 ENTRYPOINT ["/usr/local/bin/clone"]
+
+# CA bundles are architecture-independent; use the patched HHI roots on legacy ARM.
+COPY --from=hhi-arm-certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
