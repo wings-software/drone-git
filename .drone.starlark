@@ -37,7 +37,7 @@ def linux(arch):
     'steps': [
       {
         'name': 'build',
-        'image': 'harness0.harness.io/oci/docker_artifacts/hhi/go:1.26.10',
+        'image': 'harness0.harness.io/oci/docker_artifacts/golang:1.26.10@sha256:672c944cfd07599b5f1bb179869270cdc94c6254e41db4d431259693cb286b82',
         'commands': [
           'cd posix',
           'tar -xf fixtures.tar -C /',
@@ -48,6 +48,8 @@ def linux(arch):
         'name': 'publish',
         'image': 'plugins/docker',
         'settings': {
+          'pull_image': True,
+          'no_cache': True,
           'auto_tag': 'true',
           'auto_tag_suffix': 'linux-%s' % arch,
           'dockerfile': 'docker/Dockerfile.linux.%s' % arch,
@@ -91,7 +93,7 @@ def windows(version):
         # docker tag regardless of git tag.
         'commands': [
           'docker login -u $env:USERNAME -p $env:PASSWORD',
-          'docker build -f docker/Dockerfile.windows.%s -t drone/git:windows-%s-amd64 .' % (version, version),
+          'docker build --pull --no-cache -f docker/Dockerfile.windows.%s -t drone/git:windows-%s-amd64 .' % (version, version),
           'docker push drone/git:windows-%s-amd64' % version,
         ],
       },
