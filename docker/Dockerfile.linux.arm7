@@ -6,7 +6,7 @@ RUN apk add --no-cache 'ca-certificates>=20261020-r0'
 
 FROM harness0.harness.io/oci/docker_artifacts/golang:1.26.10-alpine@sha256:27f2d3b83cfc5803c8078f8e730af0f7c431bf067afaec8f60a36fb763187cba AS drone-git-builder
 ENV PATH=/usr/local/go/bin:$PATH GOPATH=/go GOTOOLCHAIN=local
-RUN apk add --no-cache git bash curl wget make build-base 'ca-certificates>=20261020-r0'
+RUN apk add --no-cache git 'ca-certificates>=20261020-r0'
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
