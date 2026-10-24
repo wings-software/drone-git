@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
 # Stage 1: rebuild drone-git from source against an up-to-date Go toolchain so
 # the binary embeds the patched stdlib + golang.org/x/crypto (CI-23158).
-FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS patched-arm-certificates
+FROM harness0.harness.io/oci/docker_artifacts/alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS patched-arm-certificates
 RUN apk add --no-cache 'ca-certificates>=20261020-r0'
 
-FROM golang:1.26.10-alpine@sha256:27f2d3b83cfc5803c8078f8e730af0f7c431bf067afaec8f60a36fb763187cba AS drone-git-builder
+FROM harness0.harness.io/oci/docker_artifacts/golang:1.26.10-alpine@sha256:27f2d3b83cfc5803c8078f8e730af0f7c431bf067afaec8f60a36fb763187cba AS drone-git-builder
 ENV PATH=/usr/local/go/bin:$PATH GOPATH=/go GOTOOLCHAIN=local
 RUN apk add --no-cache git bash curl wget make build-base 'ca-certificates>=20261020-r0'
 WORKDIR /src
@@ -16,7 +16,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 \
         -o /out/drone-git ./
 
 # Stage 2: runtime.
-FROM arm32v6/alpine:3.21@sha256:2b95cefc417586e7f72830b4ef7ef514296340e97cfde77134a4cd2dbe40c4d9
+FROM harness0.harness.io/oci/docker_artifacts/arm32v6/alpine:3.21@sha256:2b95cefc417586e7f72830b4ef7ef514296340e97cfde77134a4cd2dbe40c4d9
 COPY --from=patched-arm-certificates /etc/ssl/certs/ca-certificates.crt /etc/patched-ca/certs/ca-certificates.crt
 ENV SSL_CERT_FILE=/etc/patched-ca/certs/ca-certificates.crt SSL_CERT_DIR=/etc/patched-ca/certs
 RUN apk add --no-cache 'ca-certificates>=20261020-r0' git git-lfs openssh curl perl aws-cli sudo

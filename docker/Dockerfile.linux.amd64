@@ -41,7 +41,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 
 # Stage 3: runtime. ubi10-minimal:10.2 ships openssl-libs 3.5.5-4.el10_2
 # (resolves CVE-2026-45447) and refreshed perl/git RPMs.
-FROM redhat/ubi10-minimal:10.2@sha256:ab67cd02caf8706e34a695a1432ebe965934f6128ec352a6c3f4048b43a4fb5e
+FROM harness0.harness.io/oci/docker_artifacts/redhat/ubi10-minimal:10.2@sha256:ab67cd02caf8706e34a695a1432ebe965934f6128ec352a6c3f4048b43a4fb5e
 USER root
 COPY --from=hhi-ca-certificates /etc/hhi/ca-blocklist/ /etc/pki/ca-trust/source/blocklist/
 RUN update-ca-trust
