@@ -34,6 +34,8 @@ func TestCommits(t *testing.T) {
 			return
 		}
 
+		initRepository(t, local, remote)
+
 		cmd := exec.Command(bin)
 		cmd.Dir = local
 		cmd.Env = []string{
@@ -107,6 +109,8 @@ func TestTags(t *testing.T) {
 			return
 		}
 
+		initRepository(t, local, remote)
+
 		cmd := exec.Command(bin)
 		cmd.Dir = local
 		cmd.Env = []string{
@@ -161,6 +165,8 @@ func TestPullRequest(t *testing.T) {
 		t.Error(err)
 		return
 	}
+
+	initRepository(t, local, remote)
 
 	cmd := exec.Command(bin)
 	cmd.Dir = local
@@ -256,4 +262,15 @@ var tests = []struct {
 		file:   "hello.txt",
 		text:   "bonjour monde\n",
 	},
+}
+
+func initRepository(t *testing.T, dir, remote string) {
+	t.Helper()
+	for _, args := range [][]string{{"init"}, {"remote", "add", "origin", remote}} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("initialize clone fixture: %v: %s", err, output)
+		}
+	}
 }
