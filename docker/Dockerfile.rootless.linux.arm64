@@ -46,7 +46,6 @@ FROM harness0.harness.io/oci/docker_artifacts/redhat/ubi10-minimal:10.2@sha256:a
 USER root
 COPY --from=hhi-ca-certificates /etc/hhi/ca-blocklist/ /etc/pki/ca-trust/source/blocklist/
 RUN update-ca-trust
-USER root
 
 RUN microdnf update -y --nodocs --setopt=install_weak_deps=0 && \
     microdnf install -y --nodocs \
