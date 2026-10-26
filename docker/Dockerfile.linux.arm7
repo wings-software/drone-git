@@ -15,15 +15,32 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 \
     go build -trimpath -ldflags='-s -w' \
         -o /out/drone-git ./
 
-# Stage 2: runtime.
+# Rebuild the existing Alpine 3.21 git-lfs 3.6.0 with the patched compiler.
+FROM drone-git-builder AS git-lfs-builder
+ARG GIT_LFS_VERSION=v3.6.0
+RUN git clone --depth 1 --branch ${GIT_LFS_VERSION} https://github.com/git-lfs/git-lfs.git /git-lfs
+WORKDIR /git-lfs
+# Match the security dependency floors already used by the other plugin builds.
+RUN go get golang.org/x/crypto@v0.52.0 \
+           golang.org/x/net@v0.55.0 \
+           golang.org/x/sys@v0.45.0 \
+           golang.org/x/text@v0.37.0 && \
+    go mod tidy
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 \
+    go build -trimpath -ldflags='-s -w' -o /out/git-lfs .
+
+# Runtime.
+
 FROM harness0.harness.io/oci/docker_artifacts/arm32v6/alpine:3.21@sha256:2b95cefc417586e7f72830b4ef7ef514296340e97cfde77134a4cd2dbe40c4d9
-RUN apk add --no-cache 'ca-certificates>=20261020-r0' git git-lfs openssh curl perl aws-cli sudo
+RUN apk add --no-cache 'ca-certificates>=20261020-r0' git openssh curl perl aws-cli sudo
 
 COPY --from=patched-arm-certificates /usr/share/ca-certificates/ /usr/share/ca-certificates/
 COPY --from=patched-arm-certificates /etc/ca-certificates.conf /etc/ca-certificates.conf
 RUN rm -f /usr/share/ca-certificates/mozilla/AAA_Certificate_Services.crt /usr/share/ca-certificates/mozilla/Comodo_AAA_Services_root.crt /usr/share/ca-certificates/mozilla/emSign_ECC_Root_CA_-_G3.crt \
     && printf '%s\n' '!mozilla/AAA_Certificate_Services.crt' '!mozilla/Comodo_AAA_Services_root.crt' '!mozilla/emSign_ECC_Root_CA_-_G3.crt' >> /etc/ca-certificates.conf \
     && update-ca-certificates --fresh
+
+COPY --from=git-lfs-builder /out/git-lfs /usr/local/bin/git-lfs
 
 RUN chmod -R 777 /etc/ssh
 
