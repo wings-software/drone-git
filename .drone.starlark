@@ -26,6 +26,10 @@ def main(ctx):
 # create a pipeline stage responsible for building and
 # publishing the Docker image on linux.
 def linux(arch):
+  build_image = 'harness0.harness.io/oci/docker_artifacts/golang:1.26.10@sha256:672c944cfd07599b5f1bb179869270cdc94c6254e41db4d431259693cb286b82'
+  if arch == 'arm':
+    build_image = 'harness0.harness.io/oci/docker_artifacts/golang:1.26.10-alpine@sha256:27f2d3b83cfc5803c8078f8e730af0f7c431bf067afaec8f60a36fb763187cba'
+
   return {
     'kind': 'pipeline',
     'type': 'docker',
@@ -37,7 +41,7 @@ def linux(arch):
     'steps': [
       {
         'name': 'build',
-        'image': 'harness0.harness.io/oci/docker_artifacts/golang:1.26.10@sha256:672c944cfd07599b5f1bb179869270cdc94c6254e41db4d431259693cb286b82',
+        'image': build_image,
         'commands': [
           'cd posix',
           'tar -xf fixtures.tar -C /',

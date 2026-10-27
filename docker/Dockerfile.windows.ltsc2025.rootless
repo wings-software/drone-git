@@ -1,5 +1,11 @@
 # escape=`
 
+FROM harness0.harness.io/oci/docker_artifacts/golang:1.26.10@sha256:672c944cfd07599b5f1bb179869270cdc94c6254e41db4d431259693cb286b82 AS git-lfs-builder
+ENV CGO_ENABLED=0
+ENV GOBIN=C:\out
+ENV GOTOOLCHAIN=local
+RUN go install github.com/git-lfs/git-lfs/v3@v3.7.1
+
 FROM mcr.microsoft.com/windows/servercore:ltsc2025 AS tools
 SHELL ["powershell.exe", "-NoLogo", "-ExecutionPolicy", "Bypass", "-Command", "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue';"]
 
@@ -8,11 +14,7 @@ RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tl
     Expand-Archive git.zip -DestinationPath C:\git; `
     Remove-Item git.zip
 
-# Download and extract Git LFS
-RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
-    Invoke-WebRequest -UseBasicParsing https://github.com/git-lfs/git-lfs/releases/download/v3.7.1/git-lfs-windows-amd64-v3.7.1.zip -OutFile git-lfs.zip; `
-    Expand-Archive git-lfs.zip -DestinationPath C:\git-lfs; `
-    Remove-Item git-lfs.zip
+COPY --from=git-lfs-builder C:\out\git-lfs.exe C:\git-lfs\git-lfs-3.7.1\git-lfs.exe
 
 RUN Add-WindowsCapability -Online -Name OpenSSH.Client*
 
