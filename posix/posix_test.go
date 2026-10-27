@@ -11,7 +11,7 @@ import (
 )
 
 func TestCommits(t *testing.T) {
-	remote := "/tmp/remote/greeting"
+	remote := fixtureRemote(t)
 
 	base, err := ioutil.TempDir("", "test")
 	if err != nil {
@@ -27,6 +27,7 @@ func TestCommits(t *testing.T) {
 			t.Error(err)
 			return
 		}
+		initGit(t, local, remote)
 
 		bin, err := filepath.Abs("clone-commit")
 		if err != nil {
@@ -36,12 +37,12 @@ func TestCommits(t *testing.T) {
 
 		cmd := exec.Command(bin)
 		cmd.Dir = local
-		cmd.Env = []string{
+		cmd.Env = scriptEnv(
 			fmt.Sprintf("DRONE_COMMIT_BRANCH=%s", test.branch),
 			fmt.Sprintf("DRONE_COMMIT_SHA=%s", test.commit),
 			fmt.Sprintf("DRONE_WORKSPACE=%s", local),
 			fmt.Sprintf("DRONE_REMOTE_URL=%s", remote),
-		}
+		)
 
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -84,7 +85,7 @@ func TestCommits(t *testing.T) {
 }
 
 func TestTags(t *testing.T) {
-	remote := "/tmp/remote/greeting"
+	remote := fixtureRemote(t)
 
 	base, err := ioutil.TempDir("", "test")
 	if err != nil {
@@ -100,6 +101,7 @@ func TestTags(t *testing.T) {
 			t.Error(err)
 			return
 		}
+		initGit(t, local, remote)
 
 		bin, err := filepath.Abs("clone-tag")
 		if err != nil {
@@ -109,12 +111,12 @@ func TestTags(t *testing.T) {
 
 		cmd := exec.Command(bin)
 		cmd.Dir = local
-		cmd.Env = []string{
+		cmd.Env = scriptEnv(
 			fmt.Sprintf("DRONE_TAG=%s", test.tag),
 			fmt.Sprintf("DRONE_COMMIT_SHA=%s", test.commit),
 			fmt.Sprintf("DRONE_WORKSPACE=%s", local),
 			fmt.Sprintf("DRONE_REMOTE_URL=%s", remote),
-		}
+		)
 
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -155,6 +157,7 @@ func TestPullRequest(t *testing.T) {
 		return
 	}
 	defer os.Remove(local)
+	initGit(t, local, remote)
 
 	bin, err := filepath.Abs("clone-pull-request")
 	if err != nil {
@@ -164,13 +167,13 @@ func TestPullRequest(t *testing.T) {
 
 	cmd := exec.Command(bin)
 	cmd.Dir = local
-	cmd.Env = []string{
+	cmd.Env = scriptEnv(
 		fmt.Sprintf("DRONE_COMMIT_REF=%s", "refs/pull/14596/head"),
 		fmt.Sprintf("DRONE_COMMIT_BRANCH=%s", "main"),
 		fmt.Sprintf("DRONE_COMMIT_SHA=%s", "26923a8f37933ccc23943de0d4ebd53908268582"),
 		fmt.Sprintf("DRONE_WORKSPACE=%s", local),
 		fmt.Sprintf("DRONE_REMOTE_URL=%s", remote),
-	}
+	)
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -205,6 +208,57 @@ func TestPullRequest(t *testing.T) {
 		t.Error(err)
 		return
 	}
+}
+
+// fixtureRemote unpacks posix/fixtures.tar into a temp directory and returns the greeting repo.
+func fixtureRemote(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	cmd := exec.Command("tar", "-xf", "fixtures.tar", "-C", dir)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("extract fixtures.tar: %v\n%s", err, out)
+	}
+	return filepath.Join(dir, "tmp", "remote", "greeting")
+}
+
+// initGit prepares the workspace the way posix/common does before clone-commit,
+// clone-tag, and clone-pull-request run.
+func initGit(t *testing.T, dir, remote string) {
+	t.Helper()
+	commands := [][]string{
+		{"git", "init"},
+		{"git", "config", "user.email", "drone@localhost"},
+		{"git", "config", "user.name", "drone"},
+		{"git", "remote", "add", "origin", remote},
+	}
+	for _, args := range commands {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+	}
+}
+
+// scriptEnv keeps PATH and HOME so git can run, and does not inherit CI DRONE_* or PLUGIN_* values.
+func scriptEnv(extra ...string) []string {
+	env := []string{
+		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + os.Getenv("HOME"),
+		"GIT_CONFIG_COUNT=1",
+		"GIT_CONFIG_KEY_0=safe.directory",
+		"GIT_CONFIG_VALUE_0=*",
+		"GIT_AUTHOR_NAME=drone",
+		"GIT_AUTHOR_EMAIL=drone@localhost",
+		"GIT_COMMITTER_NAME=drone",
+		"GIT_COMMITTER_EMAIL=drone@localhost",
+	}
+	if tmp := os.Getenv("TMPDIR"); tmp != "" {
+		env = append(env, "TMPDIR="+tmp)
+	}
+	return append(env, extra...)
 }
 
 func getBranch(path string) (string, error) {

@@ -133,11 +133,13 @@ func TestCollectAndWriteMetrics_SCCDisabled(t *testing.T) {
 	os.Setenv("DISABLE_SCC_METRICS", "true")
 	os.Setenv("DRONE_REPO", "test/repo")
 	os.Setenv("DRONE_REMOTE_URL", "https://github.com/test/repo.git")
+	os.Setenv("DRONE_BUILD_EVENT", "push")
 	defer func() {
 		os.Unsetenv("PLUGIN_BUILD_TOOL_FILE")
 		os.Unsetenv("DISABLE_SCC_METRICS")
 		os.Unsetenv("DRONE_REPO")
 		os.Unsetenv("DRONE_REMOTE_URL")
+		os.Unsetenv("DRONE_BUILD_EVENT")
 	}()
 
 	// Run the function
