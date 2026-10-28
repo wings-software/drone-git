@@ -110,6 +110,8 @@ func TestCollectAndWriteMetrics_TelemetryDisabled(t *testing.T) {
 }
 
 func TestCollectAndWriteMetrics_SCCDisabled(t *testing.T) {
+	t.Setenv("DRONE_BUILD_EVENT", "push")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
 	// Create test repo structure
 	tmpDir, err := os.MkdirTemp("", "drone-git-test-*")
 	require.NoError(t, err)

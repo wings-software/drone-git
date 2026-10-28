@@ -11,7 +11,7 @@ platform:
 
 steps:
 - name: build
-  image: golang:1.22
+  image: harness0.harness.io/oci/docker_artifacts/golang:1.26.10@sha256:672c944cfd07599b5f1bb179869270cdc94c6254e41db4d431259693cb286b82
   commands:
   - cd posix
   - tar -xf fixtures.tar -C /
@@ -20,6 +20,8 @@ steps:
 - name: publish
   image: plugins/docker:18
   settings:
+    pull_image: true
+    no_cache: true
     dockerfile: docker/Dockerfile.linux.amd64
     repo: drone/git
     auto_tag: "true"
@@ -44,7 +46,7 @@ platform:
 
 steps:
 - name: build
-  image: golang:1.22
+  image: harness0.harness.io/oci/docker_artifacts/golang:1.26.10@sha256:672c944cfd07599b5f1bb179869270cdc94c6254e41db4d431259693cb286b82
   commands:
   - cd posix
   - tar -xf fixtures.tar -C /
@@ -53,6 +55,8 @@ steps:
 - name: publish
   image: plugins/docker:18
   settings:
+    pull_image: true
+    no_cache: true
     dockerfile: docker/Dockerfile.linux.arm64
     repo: drone/git
     auto_tag: "true"
@@ -77,7 +81,7 @@ platform:
 
 steps:
 - name: build
-  image: golang:1.22
+  image: harness0.harness.io/oci/docker_artifacts/golang:1.26.10-alpine@sha256:27f2d3b83cfc5803c8078f8e730af0f7c431bf067afaec8f60a36fb763187cba
   commands:
   - cd posix
   - tar -xf fixtures.tar -C /
@@ -86,6 +90,8 @@ steps:
 - name: publish
   image: plugins/docker:18
   settings:
+    pull_image: true
+    no_cache: true
     dockerfile: docker/Dockerfile.linux.arm
     repo: drone/git
     auto_tag: "true"
@@ -119,7 +125,7 @@ steps:
 - name: build
   commands:
   - docker login -u $env:USERNAME -p $env:PASSWORD
-  - docker build -f docker/Dockerfile.windows.1909 -t drone/git:windows-1909-amd64 .
+  - docker build --pull --no-cache -f docker/Dockerfile.windows.1909 -t drone/git:windows-1909-amd64 .
   - docker push drone/git:windows-1909-amd64
   environment:
     USERNAME:
@@ -151,7 +157,7 @@ steps:
 - name: build
   commands:
   - docker login -u $env:USERNAME -p $env:PASSWORD
-  - docker build -f docker/Dockerfile.windows.1903 -t drone/git:windows-1903-amd64 .
+  - docker build --pull --no-cache -f docker/Dockerfile.windows.1903 -t drone/git:windows-1903-amd64 .
   - docker push drone/git:windows-1903-amd64
   environment:
     USERNAME:
@@ -183,7 +189,7 @@ steps:
 - name: build
   commands:
   - docker login -u $env:USERNAME -p $env:PASSWORD
-  - docker build -f docker/Dockerfile.windows.1809 -t drone/git:windows-1809-amd64 .
+  - docker build --pull --no-cache -f docker/Dockerfile.windows.1809 -t drone/git:windows-1809-amd64 .
   - docker push drone/git:windows-1809-amd64
   environment:
     USERNAME:

@@ -1,7 +1,11 @@
 # syntax=docker/dockerfile:1
 # Stage 1: rebuild drone-git from source against an up-to-date Go toolchain so
 # the binary embeds the patched stdlib + golang.org/x/crypto (CI-23158).
-FROM golang:1.25.11 AS drone-git-builder
+FROM harness0.harness.io/oci/docker_artifacts/hhi/go:1.26.10@sha256:718fddf012b3a305e936ae9964e5a642036bcb7b4c6c0786e2f78f238d637db8 AS hhi-build-sdk-1
+FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1@sha256:290a37c85b4284d2c11fa0778e5da79643d912a1f5a57d6f701b77644503b7e7 AS drone-git-builder
+COPY --from=hhi-build-sdk-1 /usr/lib/go /usr/lib/go
+ENV PATH=/usr/lib/go/bin:$PATH GOPATH=/go GOTOOLCHAIN=local
+RUN apk add --no-cache git 'ca-certificates>=20261020-r0'
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -12,7 +16,11 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 
 # Stage 2: rebuild git-lfs from source under the same toolchain. The upstream
 # release tarball ships a stale go stdlib that drives several criticals.
-FROM golang:1.25.11 AS git-lfs-builder
+FROM harness0.harness.io/oci/docker_artifacts/hhi/go:1.26.10@sha256:718fddf012b3a305e936ae9964e5a642036bcb7b4c6c0786e2f78f238d637db8 AS hhi-git-toolchain-1
+FROM harness0.harness.io/oci/docker_artifacts/hhi/harnessos-alpine:1@sha256:290a37c85b4284d2c11fa0778e5da79643d912a1f5a57d6f701b77644503b7e7 AS git-lfs-builder
+COPY --from=hhi-git-toolchain-1 /usr/lib/go /usr/lib/go
+ENV PATH=/usr/lib/go/bin:$PATH GOPATH=/go GOTOOLCHAIN=local
+RUN apk add --no-cache git 'ca-certificates>=20261020-r0'
 ARG GIT_LFS_VERSION=v3.7.1
 RUN git clone --depth 1 --branch ${GIT_LFS_VERSION} https://github.com/git-lfs/git-lfs.git /src
 WORKDIR /src
@@ -28,7 +36,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 
 # Stage 3: runtime. ubi10-minimal:10.2 ships openssl-libs 3.5.5-4.el10_2
 # (resolves CVE-2026-45447) and refreshed perl/git RPMs.
-FROM redhat/ubi10-minimal:10.2
+FROM harness0.harness.io/oci/docker_artifacts/redhat/ubi10-minimal:10.2@sha256:ab67cd02caf8706e34a695a1432ebe965934f6128ec352a6c3f4048b43a4fb5e
 USER root
 
 RUN microdnf update -y --nodocs --setopt=install_weak_deps=0 && \
