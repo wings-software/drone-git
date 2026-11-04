@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -147,6 +148,82 @@ func TestMetadataContext(t *testing.T) {
 	assert.Equal(t, version, getPluginVersion())
 	version = "dev"
 	assert.Equal(t, "1.0.0", getPluginVersion())
+}
+
+func TestFindPowerShell(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		files []string
+		want  string
+	}{
+		{"prefer Core", []string{"pwsh", "powershell"}, "pwsh"},
+		{"legacy fallback", []string{"powershell"}, "powershell"},
+		{"explicit exe fallback", []string{"powershell.exe"}, "powershell.exe"},
+		{"missing executables", nil, ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			filename := func(name string) string {
+				if runtime.GOOS == "windows" && filepath.Ext(name) == "" {
+					name += ".exe"
+				}
+				return filepath.Join(dir, name)
+			}
+			for _, name := range test.files {
+				require.NoError(t, os.WriteFile(filename(name), nil, 0755))
+			}
+			t.Setenv("PATH", dir)
+			want := "pwsh"
+			if test.want != "" {
+				want = filename(test.want)
+			}
+			assert.Equal(t, want, findPowerShell())
+		})
+	}
+}
+
+func TestMetadataUnavailable(t *testing.T) {
+	root := t.TempDir()
+	output := filepath.Join(root, "metadata.json")
+	t.Setenv("PLUGIN_BUILD_TOOL_FILE", output)
+	t.Setenv("CI_DISABLE_TELEMETRY", "")
+	t.Setenv("DISABLE_SCC_METRICS", "true")
+	original := globalTmpDir
+	t.Cleanup(func() { globalTmpDir = original })
+	globalTmpDir = ""
+
+	// Analytics must not run before clone scripts have been initialized.
+	require.ErrorContains(t, executeBuildToolScript(root), "temp directory not initialized")
+	require.NoError(t, tryCollectAndWriteMetrics(root))
+	assert.NoFileExists(t, output)
+
+	// A missing provider script and malformed output still produce valid fallback JSON.
+	globalTmpDir = t.TempDir()
+	require.NoError(t, os.WriteFile(output, []byte("invalid JSON"), 0600))
+	require.NoError(t, tryCollectAndWriteMetrics(root))
+	contents, err := os.ReadFile(output)
+	require.NoError(t, err)
+	var data BuildToolData
+	require.NoError(t, json.Unmarshal(contents, &data))
+	assert.Empty(t, data.HarnessLang)
+	assert.Empty(t, data.HarnessBuildTool)
+	assert.Zero(t, data.Metrics.Files)
+
+	// An output path that is a directory must return an error and preserve the directory.
+	t.Setenv("PLUGIN_BUILD_TOOL_FILE", root)
+	require.ErrorContains(t, writeBuildToolFile(&data), "failed to write build tool file")
+	assert.DirExists(t, root)
+	t.Setenv("PLUGIN_BUILD_TOOL_FILE", "")
+	require.NoError(t, executeBuildToolScript(root))
+	require.NoError(t, writeBuildToolFile(&data))
+}
+
+func TestWriteScriptsConflict(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "posix", "clone")
+	require.NoError(t, os.MkdirAll(path, 0700))
+	require.ErrorContains(t, writeScriptsToTemp(root), "failed to write file")
+	assert.DirExists(t, path)
 }
 
 func TestWriteScriptsToTemp(t *testing.T) {
