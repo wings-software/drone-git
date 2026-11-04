@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,25 +13,140 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCaptureStdoutLargeOutput(t *testing.T) {
-	original := os.Stdout
-	want := strings.Repeat("metrics output\n", 100000)
-	var writeErr error
-	output, err := captureStdout(func() {
-		_, writeErr = os.Stdout.WriteString(want)
-	})
-	require.NoError(t, writeErr)
-	require.NoError(t, err)
-	assert.Equal(t, want, string(output))
-	assert.Same(t, original, os.Stdout)
+func TestMainCloneMetadata(t *testing.T) {
+	for _, outputFailure := range []bool{false, true} {
+		name := "successful metadata"
+		if outputFailure {
+			name = "metadata failure preserves successful clone"
+		}
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			t.Chdir(root)
+			remote := filepath.Join(root, "remote")
+			workspace := filepath.Join(root, "workspace")
+			config := filepath.Join(root, "git-config")
+			scripts := filepath.Join(root, "scripts with spaces")
+			require.NoError(t, os.MkdirAll(config, 0700))
+			require.NoError(t, os.MkdirAll(scripts, 0700))
+			for key, value := range map[string]string{
+				"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_COUNT": "0",
+				"GIT_CONFIG_GLOBAL":         filepath.Join(config, ".gitconfig"),
+				"HARNESS_GIT_CONFIG_FOLDER": config, "HARNESS_WORKDIR": scripts,
+				"DRONE_REMOTE_URL": remote, "DRONE_WORKSPACE": workspace,
+				"DRONE_BUILD_EVENT": "push", "DRONE_COMMIT_BRANCH": "main",
+				"DRONE_COMMIT_REF": "", "DRONE_NETRC_MACHINE": "", "DRONE_SSH_KEY": "",
+				"DRONE_NETRC_LFS_ENABLED": "false", "DRONE_NETRC_FETCH_TAGS": "false",
+				"DRONE_NETRC_SPARSE_CHECKOUT": "", "DRONE_NETRC_PRE_FETCH": "",
+				"DRONE_NETRC_SUBMODULE_STRATEGY": "", "DRONE_PERSIST_CREDS": "",
+				"HARNESS_GIT_PROXY": "false", "PLUGIN_ONLY_COPY_FILE_CONTENT": "false",
+				"CI_DISABLE_TELEMETRY": "", "DISABLE_SCC_METRICS": "",
+			} {
+				t.Setenv(key, value)
+			}
+			git := func(args ...string) string {
+				cmd := exec.Command("git", args...)
+				output, err := cmd.CombinedOutput()
+				require.NoError(t, err, "%s", output)
+				return strings.TrimSpace(string(output))
+			}
+			git("init", "-b", "main", remote)
+			for file, contents := range map[string]string{
+				"main.go": "package main\nfunc main() {}\n",
+				"app.js":  "console.log('test');\n", "package.json": "{\"name\":\"fixture\"}\n",
+			} {
+				require.NoError(t, os.WriteFile(filepath.Join(remote, file), []byte(contents), 0600))
+			}
+			git("-C", remote, "add", ".")
+			git("-C", remote, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "-m", "fixture")
+			sha := git("-C", remote, "rev-parse", "HEAD")
+			t.Setenv("DRONE_COMMIT_SHA", sha)
+			output := filepath.Join(root, "output", "nested", "metadata.json")
+			if outputFailure {
+				require.NoError(t, os.WriteFile(filepath.Join(root, "output"), []byte("preserve"), 0600))
+			}
+			t.Setenv("PLUGIN_BUILD_TOOL_FILE", output)
+			t.Cleanup(cleanupTempDir)
+
+			main()
+
+			assert.Equal(t, sha, git("-C", workspace, "rev-parse", "HEAD"))
+			assert.FileExists(t, filepath.Join(workspace, "main.go"))
+			assert.Empty(t, globalTmpDir)
+			entries, err := os.ReadDir(scripts)
+			require.NoError(t, err)
+			assert.Empty(t, entries, "temporary embedded scripts should be removed")
+			if outputFailure {
+				contents, err := os.ReadFile(filepath.Join(root, "output"))
+				require.NoError(t, err)
+				assert.Equal(t, "preserve", string(contents))
+				return
+			}
+			contents, err := os.ReadFile(output)
+			require.NoError(t, err)
+			var data BuildToolData
+			require.NoError(t, json.Unmarshal(contents, &data))
+			assert.Equal(t, remote, data.Repository)
+			assert.Equal(t, "branch", data.BuildEvent)
+			assert.Equal(t, "main", data.BuildEventValue)
+			assert.Equal(t, "Node", data.HarnessBuildTool)
+			assert.Contains(t, data.HarnessLang, "Golang")
+			assert.Contains(t, data.HarnessLang, "JavaScript")
+			assert.Greater(t, data.Metrics.Files, int64(0))
+			assert.Equal(t, getPluginVersion(), data.PluginVersion)
+		})
+	}
 }
 
-func TestCaptureStdoutRestoresAfterPanic(t *testing.T) {
-	original := os.Stdout
-	assert.Panics(t, func() {
-		_, _ = captureStdout(func() { panic("analysis failed") })
-	})
-	assert.Same(t, original, os.Stdout)
+func TestRunGitCloneInvalidTempDirectory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "file")
+	require.NoError(t, os.WriteFile(path, nil, 0600))
+	t.Setenv("HARNESS_WORKDIR", path)
+	t.Cleanup(cleanupTempDir)
+	require.ErrorContains(t, runGitClone(), "failed to create temp dir")
+}
+
+func TestMetadataContext(t *testing.T) {
+	for _, test := range []struct {
+		event, tag, branch, source, sha string
+		wantEvent, wantValue            string
+	}{
+		{event: "tag", tag: "v1", wantEvent: "tag", wantValue: "v1"},
+		{event: "tag", sha: "abc", wantEvent: "tag"},
+		{event: "pull_request", source: "feature", wantEvent: "pull_request", wantValue: "feature"},
+		{event: "pull_request", wantEvent: "pull_request"},
+		{event: "push", branch: "main", wantEvent: "branch", wantValue: "main"},
+		{event: "push", tag: "stale-tag", wantEvent: "push"},
+		{tag: "v2", sha: "abc", wantEvent: "tag", wantValue: "v2"},
+		{sha: "abc", wantEvent: "commit", wantValue: "abc"},
+		{},
+	} {
+		t.Run(test.event+"/"+test.wantValue, func(t *testing.T) {
+			for key, value := range map[string]string{
+				"DRONE_BUILD_EVENT": test.event, "DRONE_TAG": test.tag,
+				"DRONE_COMMIT_BRANCH": test.branch, "DRONE_SOURCE_BRANCH": test.source,
+				"DRONE_COMMIT_SHA": test.sha,
+			} {
+				t.Setenv(key, value)
+			}
+			event, value := getBuildEventInfo()
+			assert.Equal(t, test.wantEvent, event)
+			assert.Equal(t, test.wantValue, value)
+		})
+	}
+	t.Setenv("DRONE_WORKSPACE", "")
+	workdir, err := os.Getwd()
+	require.NoError(t, err)
+	workspace, err := getWorkspaceDirectory()
+	require.NoError(t, err)
+	assert.Equal(t, workdir, workspace)
+	t.Setenv("DRONE_REMOTE_URL", "")
+	assert.Empty(t, getRepositoryURL())
+	original := version
+	t.Cleanup(func() { version = original })
+	version = "v1.7.27"
+	assert.Equal(t, version, getPluginVersion())
+	version = "dev"
+	assert.Equal(t, "1.0.0", getPluginVersion())
 }
 
 func TestWriteScriptsToTemp(t *testing.T) {

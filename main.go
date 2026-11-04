@@ -237,17 +237,28 @@ func collectCodeMetrics(workdir string) (*CodeMetrics, error) {
 			}
 		}()
 
-		output, err := captureStdout(func() {
-			processor.ConfigureLazy(true)
-			processor.Process()
-		})
+		// Capture stdout to get JSON results
+		oldStdout := os.Stdout
+		r, w, err := os.Pipe()
 		if err != nil {
-			done <- err
+			done <- fmt.Errorf("failed to create pipe: %v", err)
 			return
 		}
+		os.Stdout = w
+
+		// Run scc analysis
+		processor.ConfigureLazy(true)
+		processor.Process()
+
+		// Restore stdout and read results
+		w.Close()
+		os.Stdout = oldStdout
+
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
 
 		// Parse JSON results
-		if err := json.Unmarshal(output, &results); err != nil {
+		if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
 			done <- fmt.Errorf("failed to parse analysis results: %v", err)
 			return
 		}
@@ -305,36 +316,6 @@ func collectCodeMetrics(workdir string) (*CodeMetrics, error) {
 	}
 
 	return metrics, nil
-}
-
-// Drain while the producer writes, including on Windows where pipe buffers are small.
-func captureStdout(run func()) ([]byte, error) {
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create output pipe: %w", err)
-	}
-	defer reader.Close()
-	defer writer.Close()
-
-	original := os.Stdout
-	os.Stdout = writer
-	defer func() { os.Stdout = original }()
-
-	var output bytes.Buffer
-	readDone := make(chan error, 1)
-	go func() {
-		_, err := io.Copy(&output, reader)
-		readDone <- err
-	}()
-
-	run()
-	if err := writer.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close output pipe: %w", err)
-	}
-	if err := <-readDone; err != nil {
-		return nil, fmt.Errorf("failed to read captured output: %w", err)
-	}
-	return output.Bytes(), nil
 }
 
 // executeBuildToolScript executes the get-buildtool-lang script from temp directory

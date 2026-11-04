@@ -6,7 +6,6 @@ ENV GOBIN=C:\out
 ENV GOTOOLCHAIN=local
 RUN go install github.com/git-lfs/git-lfs/v3@v3.7.1
 
-FROM git-lfs-builder AS drone-git-builder
 SHELL ["powershell.exe", "-NoLogo", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 WORKDIR C:\src
 COPY go.mod go.sum ./
@@ -18,7 +17,7 @@ ARG PLUGIN_VERSION=dev
 RUN go build -trimpath -ldflags "-s -w -X main.version=$env:PLUGIN_VERSION" -o C:\out\drone-git.exe .; if ($LASTEXITCODE -ne 0) { throw 'drone-git build failed' }
 
 # Build stage - same as original but with cleanup
-FROM mcr.microsoft.com/windows/servercore:ltsc2022 AS git
+FROM harness0.harness.io/oci/docker_artifacts/mcr/windows/servercore:ltsc2022@sha256:6b43c814ed2a800563083ce3193e5f1951d4d6a18fd2879ff45173851db82bd5 AS git
 SHELL ["powershell.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
@@ -31,7 +30,7 @@ COPY --from=git-lfs-builder C:\out\git-lfs.exe C:\git-lfs\git-lfs-3.7.1\git-lfs.
 RUN Add-WindowsCapability -Online -Name OpenSSH.Client*
 
 # PowerShell stage - download PowerShell Core manually to avoid heavy base image
-FROM mcr.microsoft.com/windows/servercore:ltsc2022 AS powershell
+FROM harness0.harness.io/oci/docker_artifacts/mcr/windows/servercore:ltsc2022@sha256:6b43c814ed2a800563083ce3193e5f1951d4d6a18fd2879ff45173851db82bd5 AS powershell
 SHELL ["powershell.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
     Invoke-WebRequest -UseBasicParsing https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.zip -OutFile powershell.zip; `
@@ -39,7 +38,7 @@ RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tl
     Remove-Item powershell.zip -Force
 
 # Git's MSYS runtime requires Win32 APIs that Nano Server does not provide.
-FROM mcr.microsoft.com/windows/servercore:ltsc2022
+FROM harness0.harness.io/oci/docker_artifacts/mcr/windows/servercore:ltsc2022@sha256:6b43c814ed2a800563083ce3193e5f1951d4d6a18fd2879ff45173851db82bd5
 
 # Copy tools from build stages (same as original)
 COPY --from=git /git /git
@@ -48,7 +47,7 @@ COPY --from=git C:\Windows\System32\OpenSSH\ /openssh
 COPY --from=powershell /PowerShell /PowerShell
 
 # Keep clone.ps1 compatible with Harness while running the metadata collector.
-COPY --from=drone-git-builder C:\out\drone-git.exe C:\bin\drone-git.exe
+COPY --from=git-lfs-builder C:\out\drone-git.exe C:\bin\drone-git.exe
 COPY windows/clone-entrypoint.ps1 /bin/clone.ps1
 
 # Set PATH (same as original)
