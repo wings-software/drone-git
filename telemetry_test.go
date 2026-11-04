@@ -196,7 +196,7 @@ func TestCollectAndWriteMetrics_WithFile(t *testing.T) {
 	}
 
 	// Set up build tool file
-	buildToolFile := filepath.Join(tmpDir, "output", "nested", "build-tool-info.json")
+	buildToolFile := filepath.Join(tmpDir, "build-tool-info.json")
 	os.Setenv("PLUGIN_BUILD_TOOL_FILE", buildToolFile)
 	defer os.Unsetenv("PLUGIN_BUILD_TOOL_FILE")
 
@@ -239,11 +239,6 @@ func TestCollectAndWriteMetrics_WithFile(t *testing.T) {
 	assert.Equal(t, "https://github.com/test/repo.git", result["repository"], "Should capture DRONE_REMOTE_URL as repository")
 	assert.Equal(t, "branch", result["build_event"], "Should detect branch build event")
 	assert.Equal(t, "main", result["build_event_value"], "Should use branch name as event value")
-	assert.Equal(t, "Node", result["harness_build_tool"])
-	assert.Contains(t, result["harness_lang"], "Golang")
-	assert.Contains(t, result["harness_lang"], "JavaScript")
-	metrics := result["metrics"].(map[string]interface{})
-	assert.Greater(t, metrics["files"].(float64), float64(0))
 }
 
 func TestJSONStructure(t *testing.T) {

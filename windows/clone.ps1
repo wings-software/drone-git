@@ -1,5 +1,4 @@
 $ErrorActionPreference = 'Stop';
-$ProgressPreference = 'SilentlyContinue';
 
 # HACK: no clue how to set the PATH inside the Dockerfile,
 # so am setting it here instead. This is not idea.
@@ -115,21 +114,21 @@ switch -regex ($Env:DRONE_COMMIT_REF)
 
 }
 
-& "${PSScriptRoot}\common.ps1"
+Invoke-Expression "${PSScriptRoot}\common.ps1"
 
 switch ($CLONE_TYPE) {
     "pull_request" {
-        & "${PSScriptRoot}\clone-pull-request.ps1"
+        Invoke-Expression "${PSScriptRoot}\clone-pull-request.ps1"
         break
     }
     "tag" {
-        & "${PSScriptRoot}\clone-tag.ps1"
+        Invoke-Expression "${PSScriptRoot}\clone-tag.ps1"
         break
     }
     default {
-        & "${PSScriptRoot}\clone-commit.ps1"
+        Invoke-Expression "${PSScriptRoot}\clone-commit.ps1"
         break
     }
 }
 
-& "${PSScriptRoot}\post-fetch.ps1"
+Invoke-Expression "${PSScriptRoot}\post-fetch.ps1"

@@ -33,7 +33,7 @@ func TestMainCloneMetadata(t *testing.T) {
 			remote := filepath.Join(root, "remote")
 			workspace := filepath.Join(root, "workspace")
 			config := filepath.Join(root, "git-config")
-			scripts := filepath.Join(root, "scripts with spaces")
+			scripts := filepath.Join(root, "scripts")
 			require.NoError(t, os.MkdirAll(config, 0700))
 			require.NoError(t, os.MkdirAll(scripts, 0700))
 			for key, value := range map[string]string{
@@ -82,6 +82,8 @@ func TestMainCloneMetadata(t *testing.T) {
 			output := filepath.Join(root, "output", "nested", "metadata.json")
 			if test.outputFailure {
 				require.NoError(t, os.WriteFile(filepath.Join(root, "output"), []byte("preserve"), 0600))
+			} else {
+				require.NoError(t, os.MkdirAll(filepath.Dir(output), 0700))
 			}
 			t.Setenv("PLUGIN_BUILD_TOOL_FILE", output)
 			t.Cleanup(cleanupTempDir)

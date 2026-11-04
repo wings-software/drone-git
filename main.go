@@ -161,7 +161,11 @@ func runGitClone() error {
 		// Find safe PowerShell executable
 		psExe := findPowerShell()
 		scriptPath := filepath.Join(globalTmpDir, "windows", "clone.ps1")
-		cmd := exec.CommandContext(ctx, psExe, "-NoProfile", "-NonInteractive", "-File", scriptPath)
+		script := fmt.Sprintf(
+			"$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; %s",
+			scriptPath)
+
+		cmd := exec.CommandContext(ctx, psExe, "-Command", script)
 		return runCmds([]*exec.Cmd{cmd}, os.Environ(), workdir, os.Stdout, os.Stderr)
 
 	case "linux", "darwin":
@@ -323,9 +327,6 @@ func executeBuildToolScript(workdir string) error {
 	buildToolFile := os.Getenv("PLUGIN_BUILD_TOOL_FILE")
 	if buildToolFile == "" {
 		return nil // No file specified, nothing to do
-	}
-	if err := os.MkdirAll(filepath.Dir(buildToolFile), mode); err != nil {
-		return fmt.Errorf("failed to create build tool output directory: %w", err)
 	}
 
 	// Scripts are already extracted to globalTmpDir by runGitClone()
@@ -496,9 +497,6 @@ func writeBuildToolFile(data *BuildToolData) error {
 	if buildToolFile == "" {
 		slog.Debug("No PLUGIN_BUILD_TOOL_FILE specified, skipping file write")
 		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(buildToolFile), mode); err != nil {
-		return fmt.Errorf("failed to create build tool output directory: %w", err)
 	}
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")

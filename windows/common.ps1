@@ -80,19 +80,9 @@ if (-not [string]::IsNullOrEmpty($env:DRONE_NETRC_SPARSE_CHECKOUT)) {
 }
 
 if (-not [string]::IsNullOrEmpty($env:DRONE_NETRC_PRE_FETCH)) {
-    Write-Host "+ $env:DRONE_NETRC_PRE_FETCH"
-    $previousErrorActionPreference = $ErrorActionPreference
-    $previousNativeCommandPreference = $PSNativeCommandUseErrorActionPreference
-    try {
-        $ErrorActionPreference = 'Stop'
-        $PSNativeCommandUseErrorActionPreference = $true
-        $global:LASTEXITCODE = 0
-        Invoke-Expression $env:DRONE_NETRC_PRE_FETCH
-        if ($LASTEXITCODE -ne 0) {
-            throw "Pre-fetch command failed with exit code $LASTEXITCODE"
-        }
-    } finally {
-        $ErrorActionPreference = $previousErrorActionPreference
-        $PSNativeCommandUseErrorActionPreference = $previousNativeCommandPreference
+    $lines = $env:DRONE_NETRC_PRE_FETCH -split "`n"
+    foreach ($line in $lines) {
+        Write-Host "+ $line"
+        Invoke-Expression $line
     }
 }
