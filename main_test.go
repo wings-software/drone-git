@@ -15,12 +15,19 @@ import (
 )
 
 func TestMainCloneMetadata(t *testing.T) {
-	for _, outputFailure := range []bool{false, true} {
-		name := "successful metadata"
-		if outputFailure {
-			name = "metadata failure preserves successful clone"
-		}
-		t.Run(name, func(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		outputFailure bool
+		noBash        bool
+	}{
+		{name: "successful metadata"},
+		{name: "metadata failure preserves successful clone", outputFailure: true},
+		{name: "minimal image without bash", noBash: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if test.noBash && runtime.GOOS == "windows" {
+				t.Skip("Windows uses PowerShell")
+			}
 			root := t.TempDir()
 			t.Chdir(root)
 			remote := filepath.Join(root, "remote")
@@ -60,9 +67,20 @@ func TestMainCloneMetadata(t *testing.T) {
 			git("-C", remote, "add", ".")
 			git("-C", remote, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "-m", "fixture")
 			sha := git("-C", remote, "rev-parse", "HEAD")
+			if test.noBash {
+				t.Setenv("GIT_EXEC_PATH", git("--exec-path"))
+				bin := filepath.Join(root, "bin")
+				require.NoError(t, os.MkdirAll(bin, 0700))
+				for _, tool := range []string{"sh", "git", "dirname", "mkdir", "chmod", "touch", "cat", "find", "sed", "sort", "uniq", "tr", "cut", "grep"} {
+					path, err := exec.LookPath(tool)
+					require.NoError(t, err)
+					require.NoError(t, os.Symlink(path, filepath.Join(bin, tool)))
+				}
+				t.Setenv("PATH", bin)
+			}
 			t.Setenv("DRONE_COMMIT_SHA", sha)
 			output := filepath.Join(root, "output", "nested", "metadata.json")
-			if outputFailure {
+			if test.outputFailure {
 				require.NoError(t, os.WriteFile(filepath.Join(root, "output"), []byte("preserve"), 0600))
 			}
 			t.Setenv("PLUGIN_BUILD_TOOL_FILE", output)
@@ -76,7 +94,7 @@ func TestMainCloneMetadata(t *testing.T) {
 			entries, err := os.ReadDir(scripts)
 			require.NoError(t, err)
 			assert.Empty(t, entries, "temporary embedded scripts should be removed")
-			if outputFailure {
+			if test.outputFailure {
 				contents, err := os.ReadFile(filepath.Join(root, "output"))
 				require.NoError(t, err)
 				assert.Equal(t, "preserve", string(contents))
@@ -104,6 +122,10 @@ func TestRunGitCloneInvalidTempDirectory(t *testing.T) {
 	t.Setenv("HARNESS_WORKDIR", path)
 	t.Cleanup(cleanupTempDir)
 	require.ErrorContains(t, runGitClone(), "failed to create temp dir")
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("PLUGIN_BUILD_TOOL_FILE", output)
+	collectAndWriteMetrics(t.TempDir())
+	assert.NoFileExists(t, output)
 }
 
 func TestMetadataContext(t *testing.T) {
@@ -212,6 +234,7 @@ func TestMetadataUnavailable(t *testing.T) {
 	// An output path that is a directory must return an error and preserve the directory.
 	t.Setenv("PLUGIN_BUILD_TOOL_FILE", root)
 	require.ErrorContains(t, writeBuildToolFile(&data), "failed to write build tool file")
+	collectAndWriteMetrics(root)
 	assert.DirExists(t, root)
 	t.Setenv("PLUGIN_BUILD_TOOL_FILE", "")
 	require.NoError(t, executeBuildToolScript(root))
@@ -224,6 +247,19 @@ func TestWriteScriptsConflict(t *testing.T) {
 	require.NoError(t, os.MkdirAll(path, 0700))
 	require.ErrorContains(t, writeScriptsToTemp(root), "failed to write file")
 	assert.DirExists(t, path)
+}
+
+func TestWorkspaceDirectoryUnavailable(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux reports an error for an unlinked working directory")
+	}
+	path := filepath.Join(t.TempDir(), "workspace")
+	require.NoError(t, os.Mkdir(path, 0700))
+	t.Chdir(path)
+	require.NoError(t, os.Remove(path))
+	t.Setenv("DRONE_WORKSPACE", "")
+	_, err := getWorkspaceDirectory()
+	require.ErrorContains(t, err, "cannot get working directory")
 }
 
 func TestWriteScriptsToTemp(t *testing.T) {
