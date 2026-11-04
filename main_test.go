@@ -5,11 +5,33 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestCaptureStdoutLargeOutput(t *testing.T) {
+	original := os.Stdout
+	want := strings.Repeat("metrics output\n", 100000)
+	var writeErr error
+	output, err := captureStdout(func() {
+		_, writeErr = os.Stdout.WriteString(want)
+	})
+	require.NoError(t, writeErr)
+	require.NoError(t, err)
+	assert.Equal(t, want, string(output))
+	assert.Same(t, original, os.Stdout)
+}
+
+func TestCaptureStdoutRestoresAfterPanic(t *testing.T) {
+	original := os.Stdout
+	assert.Panics(t, func() {
+		_, _ = captureStdout(func() { panic("analysis failed") })
+	})
+	assert.Same(t, original, os.Stdout)
+}
 
 func TestWriteScriptsToTemp(t *testing.T) {
 	// Create a temporary directory for testing

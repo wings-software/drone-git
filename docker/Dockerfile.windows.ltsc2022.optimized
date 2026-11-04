@@ -6,6 +6,17 @@ ENV GOBIN=C:\out
 ENV GOTOOLCHAIN=local
 RUN go install github.com/git-lfs/git-lfs/v3@v3.7.1
 
+FROM git-lfs-builder AS drone-git-builder
+SHELL ["powershell.exe", "-NoLogo", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+WORKDIR C:\src
+COPY go.mod go.sum ./
+RUN go mod download; if ($LASTEXITCODE -ne 0) { throw 'Go module download failed' }
+COPY main.go ./
+COPY posix/ ./posix/
+COPY windows/ ./windows/
+ARG PLUGIN_VERSION=dev
+RUN go build -trimpath -ldflags "-s -w -X main.version=$env:PLUGIN_VERSION" -o C:\out\drone-git.exe .; if ($LASTEXITCODE -ne 0) { throw 'drone-git build failed' }
+
 # Build stage - same as original but with cleanup
 FROM mcr.microsoft.com/windows/servercore:ltsc2022 AS git
 SHELL ["powershell.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
@@ -27,8 +38,8 @@ RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tl
     Expand-Archive powershell.zip -DestinationPath C:\PowerShell; `
     Remove-Item powershell.zip -Force
 
-# Final stage - Use Nano Server instead of Server Core (main optimization)
-FROM mcr.microsoft.com/windows/nanoserver:ltsc2022
+# Git's MSYS runtime requires Win32 APIs that Nano Server does not provide.
+FROM mcr.microsoft.com/windows/servercore:ltsc2022
 
 # Copy tools from build stages (same as original)
 COPY --from=git /git /git
@@ -36,11 +47,13 @@ COPY --from=git /git-lfs /git-lfs
 COPY --from=git C:\Windows\System32\OpenSSH\ /openssh
 COPY --from=powershell /PowerShell /PowerShell
 
-# Copy PowerShell scripts
-ADD windows/* /bin/
+# Keep clone.ps1 compatible with Harness while running the metadata collector.
+COPY --from=drone-git-builder C:\out\drone-git.exe C:\bin\drone-git.exe
+COPY windows/clone-entrypoint.ps1 /bin/clone.ps1
 
 # Set PATH (same as original)
 ENV PATH="C:\PowerShell;C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;C:\git-lfs\git-lfs-3.7.1;${PATH}"
 
 SHELL ["C:\\PowerShell\\pwsh.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+RUN & C:\git\usr\bin\sh.exe --version; if ($LASTEXITCODE -ne 0) { throw "Git shell startup failed: $LASTEXITCODE" }
 CMD [ "C:\\PowerShell\\pwsh.exe", "C:\\bin\\clone.ps1" ]

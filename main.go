@@ -161,11 +161,7 @@ func runGitClone() error {
 		// Find safe PowerShell executable
 		psExe := findPowerShell()
 		scriptPath := filepath.Join(globalTmpDir, "windows", "clone.ps1")
-		script := fmt.Sprintf(
-			"$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; %s",
-			scriptPath)
-
-		cmd := exec.CommandContext(ctx, psExe, "-Command", script)
+		cmd := exec.CommandContext(ctx, psExe, "-NoProfile", "-NonInteractive", "-File", scriptPath)
 		return runCmds([]*exec.Cmd{cmd}, os.Environ(), workdir, os.Stdout, os.Stderr)
 
 	case "linux", "darwin":
@@ -241,28 +237,17 @@ func collectCodeMetrics(workdir string) (*CodeMetrics, error) {
 			}
 		}()
 
-		// Capture stdout to get JSON results
-		oldStdout := os.Stdout
-		r, w, err := os.Pipe()
+		output, err := captureStdout(func() {
+			processor.ConfigureLazy(true)
+			processor.Process()
+		})
 		if err != nil {
-			done <- fmt.Errorf("failed to create pipe: %v", err)
+			done <- err
 			return
 		}
-		os.Stdout = w
-
-		// Run scc analysis
-		processor.ConfigureLazy(true)
-		processor.Process()
-
-		// Restore stdout and read results
-		w.Close()
-		os.Stdout = oldStdout
-
-		var buf bytes.Buffer
-		io.Copy(&buf, r)
 
 		// Parse JSON results
-		if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
+		if err := json.Unmarshal(output, &results); err != nil {
 			done <- fmt.Errorf("failed to parse analysis results: %v", err)
 			return
 		}
@@ -322,11 +307,44 @@ func collectCodeMetrics(workdir string) (*CodeMetrics, error) {
 	return metrics, nil
 }
 
+// Drain while the producer writes, including on Windows where pipe buffers are small.
+func captureStdout(run func()) ([]byte, error) {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create output pipe: %w", err)
+	}
+	defer reader.Close()
+	defer writer.Close()
+
+	original := os.Stdout
+	os.Stdout = writer
+	defer func() { os.Stdout = original }()
+
+	var output bytes.Buffer
+	readDone := make(chan error, 1)
+	go func() {
+		_, err := io.Copy(&output, reader)
+		readDone <- err
+	}()
+
+	run()
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close output pipe: %w", err)
+	}
+	if err := <-readDone; err != nil {
+		return nil, fmt.Errorf("failed to read captured output: %w", err)
+	}
+	return output.Bytes(), nil
+}
+
 // executeBuildToolScript executes the get-buildtool-lang script from temp directory
 func executeBuildToolScript(workdir string) error {
 	buildToolFile := os.Getenv("PLUGIN_BUILD_TOOL_FILE")
 	if buildToolFile == "" {
 		return nil // No file specified, nothing to do
+	}
+	if err := os.MkdirAll(filepath.Dir(buildToolFile), mode); err != nil {
+		return fmt.Errorf("failed to create build tool output directory: %w", err)
 	}
 
 	// Scripts are already extracted to globalTmpDir by runGitClone()
@@ -497,6 +515,9 @@ func writeBuildToolFile(data *BuildToolData) error {
 	if buildToolFile == "" {
 		slog.Debug("No PLUGIN_BUILD_TOOL_FILE specified, skipping file write")
 		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(buildToolFile), mode); err != nil {
+		return fmt.Errorf("failed to create build tool output directory: %w", err)
 	}
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
