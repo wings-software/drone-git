@@ -7,7 +7,7 @@ ENV GOTOOLCHAIN=local
 RUN go install github.com/git-lfs/git-lfs/v3@v3.7.1
 
 # Build stage - same as original but with cleanup
-FROM harness0.harness.io/oci/docker_artifacts/mcr/windows/servercore:ltsc2022@sha256:6b43c814ed2a800563083ce3193e5f1951d4d6a18fd2879ff45173851db82bd5 AS git
+FROM harness0.harness.io/oci/docker_artifacts/mcr/windows/servercore:ltsc2022-20348.5773@sha256:df8887a9e3ea17894720a023154fecce9dc6cc685ca5ff718a7f197f1dcff182 AS git
 SHELL ["powershell.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
@@ -20,7 +20,7 @@ COPY --from=git-lfs-builder C:\out\git-lfs.exe C:\git-lfs\git-lfs-3.7.1\git-lfs.
 RUN Add-WindowsCapability -Online -Name OpenSSH.Client*
 
 # PowerShell stage - download PowerShell Core manually to avoid heavy base image
-FROM harness0.harness.io/oci/docker_artifacts/mcr/windows/servercore:ltsc2022@sha256:6b43c814ed2a800563083ce3193e5f1951d4d6a18fd2879ff45173851db82bd5 AS powershell
+FROM harness0.harness.io/oci/docker_artifacts/mcr/windows/servercore:ltsc2022-20348.5773@sha256:df8887a9e3ea17894720a023154fecce9dc6cc685ca5ff718a7f197f1dcff182 AS powershell
 SHELL ["powershell.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; `
     Invoke-WebRequest -UseBasicParsing https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.zip -OutFile powershell.zip; `
@@ -28,7 +28,7 @@ RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tl
     Remove-Item powershell.zip -Force
 
 # Git's MSYS runtime requires Win32 APIs absent from Nano Server.
-FROM harness0.harness.io/oci/docker_artifacts/mcr/windows/servercore:ltsc2022@sha256:6b43c814ed2a800563083ce3193e5f1951d4d6a18fd2879ff45173851db82bd5
+FROM harness0.harness.io/oci/docker_artifacts/mcr/windows/servercore:ltsc2022-20348.5773@sha256:df8887a9e3ea17894720a023154fecce9dc6cc685ca5ff718a7f197f1dcff182
 
 # Copy tools from build stages (same as original)
 COPY --from=git /git /git
@@ -45,5 +45,8 @@ ENV PATH="C:\PowerShell;C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;
 # Run as ContainerUser (rootless)
 USER ContainerUser
 SHELL ["C:\\PowerShell\\pwsh.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
-RUN & C:\git\usr\bin\sh.exe --version; if ($LASTEXITCODE -ne 0) { throw "Git shell startup failed: $LASTEXITCODE" }
+RUN & C:\git\cmd\git.exe --version; if ($LASTEXITCODE -ne 0) { throw "Git startup failed: $LASTEXITCODE" }; `
+    & C:\git-lfs\git-lfs-3.7.1\git-lfs.exe version; if ($LASTEXITCODE -ne 0) { throw "Git LFS startup failed: $LASTEXITCODE" }; `
+    & C:\openssh\ssh.exe -V; if ($LASTEXITCODE -ne 0) { throw "SSH startup failed: $LASTEXITCODE" }; `
+    & C:\git\usr\bin\sh.exe --version; if ($LASTEXITCODE -ne 0) { throw "Git shell startup failed: $LASTEXITCODE" }
 CMD [ "C:\\PowerShell\\pwsh.exe", "C:\\bin\\clone.ps1" ]

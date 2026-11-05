@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,9 +13,21 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slog"
 )
 
 func TestMainCloneMetadata(t *testing.T) {
+	if os.Getenv("DRONE_GIT_MAIN_TEST_HELPER") == "1" {
+		main()
+		return
+	}
+	executable, err := os.Executable()
+	require.NoError(t, err)
+	args := []string{"-test.run=^TestMainCloneMetadata$"}
+	// Share Go's coverage directory so the child process contributes to the report.
+	if coverage := flag.Lookup("test.gocoverdir"); coverage != nil && coverage.Value.String() != "" {
+		args = append(args, "-test.gocoverdir="+coverage.Value.String())
+	}
 	for _, test := range []struct {
 		name          string
 		outputFailure bool
@@ -29,7 +42,6 @@ func TestMainCloneMetadata(t *testing.T) {
 				t.Skip("Windows uses PowerShell")
 			}
 			root := t.TempDir()
-			t.Chdir(root)
 			remote := filepath.Join(root, "remote")
 			workspace := filepath.Join(root, "workspace")
 			config := filepath.Join(root, "git-config")
@@ -77,6 +89,8 @@ func TestMainCloneMetadata(t *testing.T) {
 					require.NoError(t, os.Symlink(path, filepath.Join(bin, tool)))
 				}
 				t.Setenv("PATH", bin)
+				_, err := exec.LookPath("bash")
+				require.ErrorIs(t, err, exec.ErrNotFound)
 			}
 			t.Setenv("DRONE_COMMIT_SHA", sha)
 			output := filepath.Join(root, "output", "nested", "metadata.json")
@@ -86,13 +100,14 @@ func TestMainCloneMetadata(t *testing.T) {
 				require.NoError(t, os.MkdirAll(filepath.Dir(output), 0700))
 			}
 			t.Setenv("PLUGIN_BUILD_TOOL_FILE", output)
-			t.Cleanup(cleanupTempDir)
-
-			main()
+			cmd := exec.Command(executable, args...)
+			cmd.Dir = root
+			cmd.Env = append(os.Environ(), "DRONE_GIT_MAIN_TEST_HELPER=1")
+			logOutput, err := cmd.CombinedOutput()
+			require.NoError(t, err, "%s", logOutput)
 
 			assert.Equal(t, sha, git("-C", workspace, "rev-parse", "HEAD"))
 			assert.FileExists(t, filepath.Join(workspace, "main.go"))
-			assert.Empty(t, globalTmpDir)
 			entries, err := os.ReadDir(scripts)
 			require.NoError(t, err)
 			assert.Empty(t, entries, "temporary embedded scripts should be removed")
@@ -197,11 +212,23 @@ func TestFindPowerShell(t *testing.T) {
 				require.NoError(t, os.WriteFile(filename(name), nil, 0755))
 			}
 			t.Setenv("PATH", dir)
+			var logs bytes.Buffer
+			originalLogger := slog.Default()
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+			t.Cleanup(func() { slog.SetDefault(originalLogger) })
 			want := "pwsh"
 			if test.want != "" {
 				want = filename(test.want)
 			}
 			assert.Equal(t, want, findPowerShell())
+			if test.want == "" {
+				var entry struct {
+					Checked []string `json:"checked"`
+				}
+				require.NoError(t, json.Unmarshal(logs.Bytes(), &entry))
+				assert.Equal(t, []string{"pwsh", "powershell", "powershell.exe"}, entry.Checked)
+				assert.NotContains(t, logs.String(), "!BADKEY")
+			}
 		})
 	}
 }
