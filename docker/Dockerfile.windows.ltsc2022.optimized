@@ -43,6 +43,7 @@ ADD windows/* /bin/
 ENV PATH="C:\PowerShell;C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;C:\openssh;C:\git-lfs\git-lfs-3.7.1;${PATH}"
 
 SHELL ["C:\\PowerShell\\pwsh.exe", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+USER ContainerUser
 RUN & C:\git\cmd\git.exe --version; if ($LASTEXITCODE -ne 0) { throw "Git startup failed: $LASTEXITCODE" }; `
     & C:\git-lfs\git-lfs-3.7.1\git-lfs.exe version; if ($LASTEXITCODE -ne 0) { throw "Git LFS startup failed: $LASTEXITCODE" }; `
     & C:\openssh\ssh.exe -V; if ($LASTEXITCODE -ne 0) { throw "SSH startup failed: $LASTEXITCODE" }; `

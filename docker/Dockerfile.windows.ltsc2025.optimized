@@ -54,6 +54,7 @@ ENV PATH="$ProgramFiles\\PowerShell\\latest;C:\\git\\cmd;C:\\git\\mingw64\\bin;C
 ENV POWERSHELL_TELEMETRY_OPTOUT="0"
 SHELL ["C:\\Program Files\\PowerShell\\latest\\pwsh.exe", "-NoLogo", "-Command", "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue';"]
 
+USER ContainerUser
 RUN & C:\git\cmd\git.exe --version; if ($LASTEXITCODE -ne 0) { throw "Git startup failed: $LASTEXITCODE" }; `
     & C:\git-lfs\git-lfs-3.7.1\git-lfs.exe version; if ($LASTEXITCODE -ne 0) { throw "Git LFS startup failed: $LASTEXITCODE" }; `
     & C:\openssh\ssh.exe -V; if ($LASTEXITCODE -ne 0) { throw "SSH startup failed: $LASTEXITCODE" }; `
