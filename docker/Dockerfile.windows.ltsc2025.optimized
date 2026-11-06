@@ -7,7 +7,7 @@ ENV GOTOOLCHAIN=local
 RUN go install github.com/git-lfs/git-lfs/v3@v3.7.1
 
 # Build stage - same as original but with cleanup
-FROM mcr.microsoft.com/windows/servercore:ltsc2025 AS tools
+FROM harness0.harness.io/oci/docker_artifacts/mcr/windows/servercore:ltsc2025-26100.33674@sha256:12eb9fb0087ea6c512db739291992948caa98f6fbef9e85ec4749ad4df3f0735 AS tools
 SHELL ["powershell.exe", "-NoLogo", "-ExecutionPolicy", "Bypass", "-Command", "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue';"]
 
 # Install MiniGit (same as original)
@@ -22,7 +22,7 @@ COPY --from=git-lfs-builder C:\out\git-lfs.exe C:\git-lfs\git-lfs-3.7.1\git-lfs.
 RUN Add-WindowsCapability -Online -Name OpenSSH.Client*
 
 # PowerShell stage - download PowerShell Core to avoid heavy base image
-FROM mcr.microsoft.com/windows/servercore:ltsc2025 AS powershell
+FROM harness0.harness.io/oci/docker_artifacts/mcr/windows/servercore:ltsc2025-26100.33674@sha256:12eb9fb0087ea6c512db739291992948caa98f6fbef9e85ec4749ad4df3f0735 AS powershell
 SHELL ["C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "-Command"]
 RUN $ProgressPreference = 'SilentlyContinue'; `
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12; `
@@ -30,8 +30,8 @@ RUN $ProgressPreference = 'SilentlyContinue'; `
     Expand-Archive C:\powershell.zip -DestinationPath C:\PowerShell; `
     Remove-Item C:\powershell.zip -Force
 
-# Final stage - Use Nano Server instead of Server Core (main optimization)
-FROM mcr.microsoft.com/windows/nanoserver:ltsc2025
+# Git's bundled MSYS runtime requires Win32 APIs absent from Nano Server.
+FROM harness0.harness.io/oci/docker_artifacts/mcr/windows/servercore:ltsc2025-26100.33674@sha256:12eb9fb0087ea6c512db739291992948caa98f6fbef9e85ec4749ad4df3f0735
 
 # Environment variables (same as original)
 ENV ProgramFiles="C:\\Program Files" `
@@ -54,4 +54,9 @@ ENV PATH="$ProgramFiles\\PowerShell\\latest;C:\\git\\cmd;C:\\git\\mingw64\\bin;C
 ENV POWERSHELL_TELEMETRY_OPTOUT="0"
 SHELL ["C:\\Program Files\\PowerShell\\latest\\pwsh.exe", "-NoLogo", "-Command", "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue';"]
 
+USER ContainerUser
+RUN & C:\git\cmd\git.exe --version; if ($LASTEXITCODE -ne 0) { throw "Git startup failed: $LASTEXITCODE" }; `
+    & C:\git-lfs\git-lfs-3.7.1\git-lfs.exe version; if ($LASTEXITCODE -ne 0) { throw "Git LFS startup failed: $LASTEXITCODE" }; `
+    & C:\openssh\ssh.exe -V; if ($LASTEXITCODE -ne 0) { throw "SSH startup failed: $LASTEXITCODE" }; `
+    & C:\git\usr\bin\sh.exe --version; if ($LASTEXITCODE -ne 0) { throw "Git shell startup failed: $LASTEXITCODE" }
 CMD ["C:\\Program Files\\PowerShell\\latest\\pwsh.exe", "C:\\bin\\clone.ps1"]

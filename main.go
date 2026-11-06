@@ -126,7 +126,7 @@ func findPowerShell() string {
 			return path
 		}
 	}
-	slog.Warn("no suitable PowerShell executable found (checked: %v). Using pwsh as default", candidates)
+	slog.Warn("no suitable PowerShell executable found. Using pwsh as default", "checked", candidates)
 	return "pwsh"
 }
 
