@@ -1,10 +1,15 @@
 #!/bin/sh
 
-if [ ! -z "$PLUGIN_OUTPUT_FILE_PATHS_CONTENT" ]; then
-    for FILE_PATH in ${PLUGIN_OUTPUT_FILE_PATHS_CONTENT//,/ }; do
-      FILE_CONTENT=$(<$FILE_PATH)
-      FILE_CONTENT_BASE_64=`echo "$FILE_CONTENT" | base64`
-      FIXED_FILE_CONTENT=`echo $FILE_CONTENT_BASE_64 | tr = -`
-      echo "$FILE_PATH=$FIXED_FILE_CONTENT" >> $DRONE_OUTPUT
+# POSIX-only: this script is invoked with `sh`, which is dash on Debian/Ubuntu
+# hosts (e.g. Harness Cloud when running as a binary plugin), so no bashisms
+# (${var//a/b}, $(<file), echo escapes) are allowed here.
+
+if [ -n "$PLUGIN_OUTPUT_FILE_PATHS_CONTENT" ]; then
+    FILE_PATHS=$(printf '%s' "$PLUGIN_OUTPUT_FILE_PATHS_CONTENT" | tr ',' ' ')
+    for FILE_PATH in $FILE_PATHS; do
+      FILE_CONTENT=$(cat "$FILE_PATH")
+      FILE_CONTENT_BASE_64=$(printf '%s\n' "$FILE_CONTENT" | base64)
+      FIXED_FILE_CONTENT=$(echo $FILE_CONTENT_BASE_64 | tr = -)
+      echo "$FILE_PATH=$FIXED_FILE_CONTENT" >> "$DRONE_OUTPUT"
     done
 fi

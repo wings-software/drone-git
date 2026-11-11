@@ -10,6 +10,54 @@ import (
 	"testing"
 )
 
+// Regression test for CI-26027. The binary plugin can run these scripts with
+// dash, so copy-file-content must not rely on bash syntax.
+func TestCopyFileContentPosixShells(t *testing.T) {
+	script, err := filepath.Abs("copy-file-content")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, shell := range []string{"sh", "dash", "bash"} {
+		shell := shell
+		t.Run(shell, func(t *testing.T) {
+			shellPath, err := exec.LookPath(shell)
+			if err != nil {
+				t.Skipf("%s not available", shell)
+			}
+
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("hello\\nworld\nline2\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "b.txt"), []byte("short"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			outputPath := filepath.Join(dir, "output")
+
+			cmd := exec.Command(shellPath, script)
+			cmd.Dir = dir
+			cmd.Env = append(os.Environ(),
+				"PLUGIN_OUTPUT_FILE_PATHS_CONTENT=a.txt,b.txt",
+				"DRONE_OUTPUT="+outputPath,
+			)
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("%s failed: %v\n%s", shell, err, output)
+			}
+
+			got, err := os.ReadFile(outputPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "a.txt=aGVsbG9cbndvcmxkCmxpbmUyCg--\nb.txt=c2hvcnQK\n"
+			if string(got) != want {
+				t.Errorf("want output %q, got %q", want, got)
+			}
+		})
+	}
+}
+
 func TestCommits(t *testing.T) {
 	remote := fixtureRemote(t)
 
