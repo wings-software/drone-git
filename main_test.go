@@ -133,6 +133,81 @@ func TestMainCloneMetadata(t *testing.T) {
 	}
 }
 
+// TestMainCloneArtifactMetadata runs the real binary end-to-end against a local
+// git remote and verifies the gitClone/v1 artifact receipt (repo URL +
+// checked-out commit) is written to PLUGIN_ARTIFACT_FILE after the clone
+// (CI-25945). Kept separate from TestMainCloneMetadata so artifact assertions
+// can never fail the pre-existing metadata scenarios.
+func TestMainCloneArtifactMetadata(t *testing.T) {
+	if os.Getenv("DRONE_GIT_MAIN_ARTIFACT_TEST_HELPER") == "1" {
+		main()
+		return
+	}
+	executable, err := os.Executable()
+	require.NoError(t, err)
+	args := []string{"-test.run=^TestMainCloneArtifactMetadata$"}
+	// Share Go's coverage directory so the child process contributes to the report.
+	if coverage := flag.Lookup("test.gocoverdir"); coverage != nil && coverage.Value.String() != "" {
+		args = append(args, "-test.gocoverdir="+coverage.Value.String())
+	}
+
+	root := t.TempDir()
+	remote := filepath.Join(root, "remote")
+	workspace := filepath.Join(root, "workspace")
+	config := filepath.Join(root, "git-config")
+	scripts := filepath.Join(root, "scripts")
+	require.NoError(t, os.MkdirAll(config, 0700))
+	require.NoError(t, os.MkdirAll(scripts, 0700))
+	for key, value := range map[string]string{
+		"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_COUNT": "0",
+		"GIT_CONFIG_GLOBAL":         filepath.Join(config, ".gitconfig"),
+		"HARNESS_GIT_CONFIG_FOLDER": config, "HARNESS_WORKDIR": scripts,
+		"DRONE_REMOTE_URL": remote, "DRONE_WORKSPACE": workspace,
+		"DRONE_BUILD_EVENT": "push", "DRONE_COMMIT_BRANCH": "main",
+		"DRONE_COMMIT_REF": "", "DRONE_NETRC_MACHINE": "", "DRONE_SSH_KEY": "",
+		"DRONE_NETRC_LFS_ENABLED": "false", "DRONE_NETRC_FETCH_TAGS": "false",
+		"DRONE_NETRC_SPARSE_CHECKOUT": "", "DRONE_NETRC_PRE_FETCH": "",
+		"DRONE_NETRC_SUBMODULE_STRATEGY": "", "DRONE_PERSIST_CREDS": "",
+		"HARNESS_GIT_PROXY": "false", "PLUGIN_ONLY_COPY_FILE_CONTENT": "false",
+		"CI_DISABLE_TELEMETRY": "", "DISABLE_SCC_METRICS": "",
+	} {
+		t.Setenv(key, value)
+	}
+	git := func(args ...string) string {
+		cmd := exec.Command("git", args...)
+		output, err := cmd.CombinedOutput()
+		require.NoError(t, err, "%s", output)
+		return strings.TrimSpace(string(output))
+	}
+	git("init", "-b", "main", remote)
+	require.NoError(t, os.WriteFile(filepath.Join(remote, "main.go"), []byte("package main\n"), 0600))
+	git("-C", remote, "add", ".")
+	git("-C", remote, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "-m", "fixture")
+	sha := git("-C", remote, "rev-parse", "HEAD")
+	t.Setenv("DRONE_COMMIT_SHA", sha)
+	output := filepath.Join(root, "output", "metadata.json")
+	require.NoError(t, os.MkdirAll(filepath.Dir(output), 0700))
+	t.Setenv("PLUGIN_BUILD_TOOL_FILE", output)
+	artifact := filepath.Join(root, "addon", "tmp", ".plugin", "artifact")
+	t.Setenv("PLUGIN_ARTIFACT_FILE", artifact)
+
+	cmd := exec.Command(executable, args...)
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), "DRONE_GIT_MAIN_ARTIFACT_TEST_HELPER=1")
+	logOutput, err := cmd.CombinedOutput()
+	require.NoError(t, err, "%s", logOutput)
+
+	assert.Equal(t, sha, git("-C", workspace, "rev-parse", "HEAD"))
+	assert.FileExists(t, filepath.Join(workspace, "main.go"))
+	artifactContents, err := os.ReadFile(artifact)
+	require.NoError(t, err)
+	var payload cloneArtifactFile
+	require.NoError(t, json.Unmarshal(artifactContents, &payload))
+	assert.Equal(t, cloneArtifactKind, payload.Kind)
+	assert.Equal(t, remote, payload.Data.RepoURL)
+	assert.Equal(t, sha, payload.Data.CommitSHA)
+}
+
 func TestRunGitCloneInvalidTempDirectory(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "file")
 	require.NoError(t, os.WriteFile(path, nil, 0600))

@@ -606,8 +606,15 @@ func main() {
 	// Get workspace directory for analysis
 	workdir, err := getWorkspaceDirectory()
 	if err != nil {
-		slog.Warn("Cannot get workspace directory for analytics, skipping metrics collection", "error", err)
-		return // Analytics failure - don't fail the step, just skip
+		slog.Warn("Cannot get workspace directory, skipping post-clone operations", "error", err)
+		return // Post-clone failure - don't fail the step, just skip
+	}
+
+	// Publish clone artifact metadata (repo URL + checked-out commit) for
+	// artifact-to-commit traceability in explicit Git Clone steps (CI-25945).
+	// Note: metadata failures should not fail the step
+	if err := writeCloneArtifactMetadata(workdir); err != nil {
+		slog.Warn("Clone artifact metadata write failed but continuing (metadata only)", "error", err)
 	}
 
 	// Collect code metrics and write complete build tool file
