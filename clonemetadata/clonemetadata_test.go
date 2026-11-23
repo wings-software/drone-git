@@ -1,0 +1,427 @@
+package clonemetadata
+
+import (
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestParseRepoIdentity(t *testing.T) {
+	for _, test := range []struct {
+		raw       string
+		scmType   string
+		org, repo string
+	}{
+		// Legacy rules (empty scmType): the pre-CI-25945 behavior, unchanged.
+		{raw: "https://user:token@github.com/acme/app.git", org: "acme", repo: "app"},
+		{raw: "https://github.com/acme/app", org: "acme", repo: "app"},
+		{raw: "git@github.com:acme/app.git", org: "acme", repo: "app"},
+		{raw: "ssh://git@github.com/acme/app.git", org: "acme", repo: "app"},
+		{raw: "https://gitlab.com/group/subgroup/repo.git", org: "group/subgroup", repo: "repo"},
+		{raw: "https://dev.azure.com/myorg/myproject/_git/myrepo", org: "myorg", repo: "myrepo"},
+		{raw: "https://bitbucket.example.com/scm/PROJ/repo.git", org: "PROJ", repo: "repo"},
+		{raw: "", org: "", repo: ""},
+
+		// Provider-aware rules (scmType from DRONE_REPO_SCM).
+		{raw: "https://github.com/acme/app.git", scmType: scmGithub, org: "acme", repo: "app"},
+		{raw: "https://gitlab.com/group/subgroup/repo.git", scmType: scmGitlab, org: "group/subgroup", repo: "repo"},
+		// A GitLab namespace genuinely named "scm" is identity, not furniture.
+		{raw: "https://gitlab.com/scm/tools/app.git", scmType: scmGitlab, org: "scm/tools", repo: "app"},
+		{raw: "https://dev.azure.com/myorg/myproject/_git/myrepo", scmType: scmAzureRepo, org: "myorg", repo: "myrepo"},
+		// Azure SSH: scp-style carries a v3/ path prefix; the ssh:// form puts :v3
+		// in the port position, which url.Parse rejects (repoPath cuts it manually).
+		{raw: "myorg@vs-ssh.visualstudio.com:v3/myorg/myproject/_git/myrepo", scmType: scmAzureRepo, org: "myorg", repo: "myrepo"},
+		{raw: "ssh://myorg@vs-ssh.visualstudio.com:v3/myorg/myproject/_git/myrepo", scmType: scmAzureRepo, org: "myorg", repo: "myrepo"},
+		// Azure's current SSH form (ssh.dev.azure.com) drops the _git segment; the
+		// v3/ prefix still marks the fixed org/project/repo shape.
+		{raw: "git@ssh.dev.azure.com:v3/myorg/myproject/myrepo", scmType: scmAzureRepo, org: "myorg", repo: "myrepo"},
+		{raw: "https://bitbucket.org/acme/app.git", scmType: scmBitbucket, org: "acme", repo: "app"},
+		{raw: "https://bitbucket.example.com/scm/PROJ/repo.git", scmType: scmBitbucket, org: "PROJ", repo: "repo"},
+		// Server mounted under a context path: everything through "scm" is prefix.
+		{raw: "https://example.com/bitbucket/scm/PROJ/repo.git", scmType: scmBitbucket, org: "PROJ", repo: "repo"},
+		{raw: "https://git-codecommit.us-east-1.amazonaws.com/v1/repos/app", scmType: scmCodeCommit, org: "", repo: "app"},
+		{raw: "https://git.harness.io/account/org/proj/app.git", scmType: scmHarness, org: "account/org/proj", repo: "app"},
+		{raw: "https://vcs.example.com/acme/app.git", scmType: scmGit, org: "acme", repo: "app"},
+	} {
+		t.Run(test.scmType+"/"+test.raw, func(t *testing.T) {
+			org, repo := parseRepoIdentity(sanitizeRepoURL(test.raw), test.scmType)
+			assert.Equal(t, test.org, org)
+			assert.Equal(t, test.repo, repo)
+		})
+	}
+}
+
+func TestSanitizeRepoURL(t *testing.T) {
+	assert.Equal(t, "https://github.com/acme/app.git", sanitizeRepoURL("https://user:token@github.com/acme/app.git"))
+	assert.Equal(t, "git@github.com:acme/app.git", sanitizeRepoURL("git@github.com:acme/app.git"))
+	assert.Equal(t, "", sanitizeRepoURL(""))
+}
+
+// A PR build event with no tag resolves to refType pr. refType is computed from
+// the tag or PR, not read from any manager env var.
+func TestTryWriteRefTypePRFromBuildEvent(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_BUILD_EVENT", "pull_request")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_PULL_REQUEST", "7")
+	t.Setenv("DRONE_TAG", "")
+	t.Setenv("DRONE_COMMIT_REF", "")
+
+	require.NoError(t, TryWrite(workdir))
+	got := readMetadata(t, output)
+	assert.Equal(t, "pr", got.RefType)
+}
+
+// A plain branch push resolves to refType branch.
+func TestTryWriteRefTypeBranch(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_BUILD_EVENT", "push")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_PULL_REQUEST", "")
+	t.Setenv("DRONE_TAG", "")
+	t.Setenv("DRONE_COMMIT_REF", "")
+
+	require.NoError(t, TryWrite(workdir))
+	got := readMetadata(t, output)
+	assert.Equal(t, "branch", got.RefType)
+}
+
+func TestTryWriteBranchClone(t *testing.T) {
+	workdir := initRepo(t, map[string]string{
+		"f.txt": "a\nb\nc\n",
+		"g.txt": "one\n",
+	})
+	sha := git(t, workdir, "rev-parse", "HEAD")
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_CI_EXPLICIT_GIT_CLONE_STEP", "true")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://user:token@github.com/acme/app.git")
+	t.Setenv("DRONE_BUILD_EVENT", "push")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_TAG", "")
+	t.Setenv("DRONE_COMMIT_REF", "")
+	t.Setenv("DRONE_COMMIT_SHA", "")
+
+	before := time.Now().UnixMilli()
+	require.NoError(t, TryWrite(workdir))
+	after := time.Now().UnixMilli()
+
+	got := readMetadata(t, output)
+	assert.Equal(t, "https://github.com/acme/app", got.RepoURL)
+	assert.Equal(t, sha, got.CommitSHA)
+	assert.Equal(t, "branch", got.RefType)
+	require.NotNil(t, got.LinesOfCode)
+	assert.Equal(t, int64(4), *got.LinesOfCode)
+	assert.Equal(t, "main", got.Branch)
+	assert.Empty(t, got.Tag)
+	assert.Equal(t, "app", got.RepoName)
+	assert.Equal(t, "acme", got.OrgName)
+	assert.GreaterOrEqual(t, got.Timestamp, before)
+	assert.LessOrEqual(t, got.Timestamp, after)
+	assert.NotContains(t, string(mustRead(t, output)), "token")
+}
+
+func TestTryWriteTagClone(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+	git(t, workdir, "tag", "v1.2.3")
+	git(t, workdir, "checkout", "--detach", "v1.2.3")
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_CI_EXPLICIT_GIT_CLONE_STEP", "true")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "git@github.com:acme/app.git")
+	t.Setenv("DRONE_BUILD_EVENT", "tag")
+	t.Setenv("DRONE_COMMIT_BRANCH", "")
+	t.Setenv("DRONE_TAG", "v1.2.3")
+	t.Setenv("DRONE_COMMIT_REF", "refs/tags/v1.2.3")
+
+	require.NoError(t, TryWrite(workdir))
+	got := readMetadata(t, output)
+	assert.Equal(t, "git@github.com:acme/app", got.RepoURL)
+	assert.Equal(t, "tag", got.RefType)
+	assert.Empty(t, got.Branch)
+	assert.Equal(t, "v1.2.3", got.Tag)
+	assert.Equal(t, "acme", got.OrgName)
+	assert.Equal(t, "app", got.RepoName)
+	require.NotNil(t, got.LinesOfCode)
+	assert.Equal(t, int64(1), *got.LinesOfCode)
+}
+
+func TestTryWritePullRequestUsesCheckedOutBranch(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+	git(t, workdir, "checkout", "-b", "feature")
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_CI_EXPLICIT_GIT_CLONE_STEP", "true")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_BUILD_EVENT", "pull_request")
+	t.Setenv("DRONE_COMMIT_BRANCH", "feature")
+	t.Setenv("DRONE_SOURCE_BRANCH", "somewhere-else")
+	t.Setenv("DRONE_TAG", "stale")
+	t.Setenv("DRONE_COMMIT_REF", "refs/pull/7/head")
+
+	require.NoError(t, TryWrite(workdir))
+	got := readMetadata(t, output)
+	assert.Equal(t, "pr", got.RefType)
+	assert.Equal(t, "feature", got.Branch)
+	assert.Empty(t, got.Tag)
+}
+
+func TestTryWriteTagFromRefWhenEnvTagEmpty(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+	git(t, workdir, "checkout", "--detach", "HEAD")
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_CI_EXPLICIT_GIT_CLONE_STEP", "true")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_BUILD_EVENT", "tag")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_TAG", "")
+	t.Setenv("DRONE_COMMIT_REF", "refs/tags/v9")
+
+	require.NoError(t, TryWrite(workdir))
+	got := readMetadata(t, output)
+	assert.Equal(t, "tag", got.RefType)
+	assert.Empty(t, got.Branch)
+	assert.Equal(t, "v9", got.Tag)
+}
+
+// The metadata file path is the only gate: implicit codebase clones must write a
+// receipt too (CI-25945), so the explicit-clone marker does not gate writing.
+func TestTryWriteWritesRegardlessOfExplicitMarker(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_CI_EXPLICIT_GIT_CLONE_STEP", "")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_TAG", "")
+	t.Setenv("DRONE_COMMIT_REF", "")
+
+	require.NoError(t, TryWrite(workdir))
+	assert.FileExists(t, output)
+}
+
+func TestTryWriteSkipsWithoutMetadataFilePath(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+	t.Setenv("HARNESS_CI_EXPLICIT_GIT_CLONE_STEP", "true")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", "")
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+
+	require.NoError(t, TryWrite(workdir))
+}
+
+func TestTryWriteSkipsWhenNothingToRecord(t *testing.T) {
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_CI_EXPLICIT_GIT_CLONE_STEP", "true")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "")
+	t.Setenv("DRONE_COMMIT_SHA", "")
+	require.NoError(t, TryWrite(t.TempDir()))
+	assert.NoFileExists(t, output)
+}
+
+// A receipt with an empty commitSha must never be written: the manager persists
+// it as a billing row with a hole. Temp dir is not a git repo and DRONE_COMMIT_SHA
+// is unset, so no SHA can be resolved.
+func TestTryWriteSkipsWhenCommitShaMissing(t *testing.T) {
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_CI_EXPLICIT_GIT_CLONE_STEP", "true")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_COMMIT_SHA", "")
+	require.NoError(t, TryWrite(t.TempDir()))
+	assert.NoFileExists(t, output)
+}
+
+// Same for repoUrl: the manager drops repoUrl-less receipts, so writing one is noise.
+func TestTryWriteSkipsWhenRepoUrlMissing(t *testing.T) {
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_CI_EXPLICIT_GIT_CLONE_STEP", "true")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "")
+	t.Setenv("DRONE_COMMIT_SHA", "abc123")
+	require.NoError(t, TryWrite(t.TempDir()))
+	assert.NoFileExists(t, output)
+}
+
+// scmType is copied verbatim from DRONE_REPO_SCM into the receipt, and it steers
+// identity parsing: the Azure v3/ SSH prefix is stripped only because the manager
+// told us the provider.
+func TestTryWriteScmTypeFromEnv(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REPO_SCM", "AzureRepo")
+	t.Setenv("DRONE_REMOTE_URL", "myorg@vs-ssh.visualstudio.com:v3/myorg/myproject/_git/myrepo")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_TAG", "")
+	t.Setenv("DRONE_COMMIT_REF", "")
+
+	require.NoError(t, TryWrite(workdir))
+	got := readMetadata(t, output)
+	assert.Equal(t, "AzureRepo", got.SCMType)
+	assert.Equal(t, "myorg", got.OrgName)
+	assert.Equal(t, "myrepo", got.RepoName)
+}
+
+func TestTryWriteReportsFileError(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+	t.Setenv("HARNESS_CI_EXPLICIT_GIT_CLONE_STEP", "true")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", workdir)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_BUILD_EVENT", "push")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_TAG", "")
+	err := TryWrite(workdir)
+	require.ErrorContains(t, err, "failed to write explicit git clone metadata file")
+}
+
+func TestCommitSHAFallsBackToEnv(t *testing.T) {
+	t.Setenv("DRONE_COMMIT_SHA", "abc123")
+	assert.Equal(t, "abc123", resolveCommitSHA(t.TempDir()))
+}
+
+// The checked-out commit wins over DRONE_COMMIT_SHA: for a PR merge checkout the
+// env SHA is the source head, not what git actually put in workdir.
+func TestCommitSHAPrefersCheckedOutCommit(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+	sha := git(t, workdir, "rev-parse", "HEAD")
+	t.Setenv("DRONE_COMMIT_SHA", "deadbeef")
+	assert.Equal(t, sha, resolveCommitSHA(workdir))
+}
+
+// DRONE_PULL_REQUEST is the manager's own number; it takes priority over the ref.
+func TestResolvePRNumberFromEnv(t *testing.T) {
+	t.Setenv("DRONE_PULL_REQUEST", "42")
+	t.Setenv("DRONE_COMMIT_REF", "refs/pull/9/head")
+	n, ok := resolvePRNumber()
+	assert.True(t, ok)
+	assert.Equal(t, int64(42), n)
+}
+
+func TestResolvePRNumberFromCommitRef(t *testing.T) {
+	for _, ref := range []string{
+		"refs/pull/17/head",
+		"refs/pull-requests/17/from",
+		"refs/merge-requests/17/head",
+	} {
+		t.Run(ref, func(t *testing.T) {
+			t.Setenv("DRONE_PULL_REQUEST", "")
+			t.Setenv("DRONE_COMMIT_REF", ref)
+			n, ok := resolvePRNumber()
+			assert.True(t, ok)
+			assert.Equal(t, int64(17), n)
+		})
+	}
+}
+
+func TestResolvePRNumberAbsent(t *testing.T) {
+	for _, test := range []struct {
+		pr  string
+		ref string
+	}{
+		{pr: "", ref: ""},
+		{pr: "", ref: "refs/heads/main"},
+		{pr: "", ref: "refs/tags/v1"},
+		{pr: "abc", ref: ""}, // not a number
+		{pr: "0", ref: ""},   // zero is not a PR number
+		{pr: "", ref: "refs/pull/x/head"},
+	} {
+		t.Run(test.pr+"/"+test.ref, func(t *testing.T) {
+			t.Setenv("DRONE_PULL_REQUEST", test.pr)
+			t.Setenv("DRONE_COMMIT_REF", test.ref)
+			_, ok := resolvePRNumber()
+			assert.False(t, ok)
+		})
+	}
+}
+
+// A PR clone: prNumber lands in the receipt and refType resolves to pr.
+func TestTryWritePullRequestReceipt(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\nb\n"})
+	sha := git(t, workdir, "rev-parse", "HEAD")
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_BUILD_EVENT", "pull_request")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_PULL_REQUEST", "17")
+	t.Setenv("DRONE_COMMIT_REF", "refs/pull/17/head")
+	t.Setenv("DRONE_TAG", "")
+
+	require.NoError(t, TryWrite(workdir))
+	got := readMetadata(t, output)
+	assert.Equal(t, "pr", got.RefType)
+	require.NotNil(t, got.PRNumber)
+	assert.Equal(t, int64(17), *got.PRNumber)
+	assert.Equal(t, sha, got.CommitSHA)
+	assert.Equal(t, "acme", got.OrgName)
+	assert.Equal(t, "app", got.RepoName)
+	assert.Greater(t, got.Timestamp, int64(0))
+}
+
+func initRepo(t *testing.T, files map[string]string) string {
+	t.Helper()
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_OPTIONAL_LOCKS", "0")
+
+	dir := t.TempDir()
+	git(t, dir, "init", "-b", "main")
+	git(t, dir, "config", "gc.auto", "0")
+	git(t, dir, "config", "maintenance.auto", "false")
+	git(t, dir, "config", "core.fsmonitor", "false")
+	git(t, dir, "config", "core.untrackedCache", "false")
+	git(t, dir, "config", "commit.gpgsign", "false")
+	for name, contents := range files {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(contents), 0600))
+	}
+	git(t, dir, "add", ".")
+	git(t, dir, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture")
+	return dir
+}
+
+func git(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "%s", out)
+	return strings.TrimSpace(string(out))
+}
+
+func readMetadata(t *testing.T, path string) Metadata {
+	t.Helper()
+	var got Metadata
+	require.NoError(t, json.Unmarshal(mustRead(t, path), &got))
+	return got
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return data
+}

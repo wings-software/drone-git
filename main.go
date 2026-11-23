@@ -17,6 +17,8 @@ import (
 
 	"github.com/boyter/scc/v3/processor"
 	"golang.org/x/exp/slog"
+
+	"github.com/harness/drone-git/clonemetadata"
 )
 
 const mode os.FileMode = 0755
@@ -608,6 +610,12 @@ func main() {
 	if err != nil {
 		slog.Warn("Cannot get workspace directory for analytics, skipping metrics collection", "error", err)
 		return // Analytics failure - don't fail the step, just skip
+	}
+
+	// Write clone metadata for Git Clone steps (optional, fail-open - CI-25945)
+	if err := clonemetadata.TryWrite(workdir); err != nil {
+		slog.Warn("Git clone metadata write failed but continuing", "error", err)
+		// Continue - don't fail the step for metadata issues
 	}
 
 	// Collect code metrics and write complete build tool file
