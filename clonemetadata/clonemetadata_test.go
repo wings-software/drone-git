@@ -64,21 +64,34 @@ func TestSanitizeRepoURL(t *testing.T) {
 	assert.Equal(t, "", sanitizeRepoURL(""))
 }
 
-// A PR build event with no tag resolves to refType pr. refType is computed from
-// the tag or PR, not read from any manager env var.
+// refType comes from the binary's build-event classification (getBuildEventInfo),
+// shared with the telemetry file; the receipt does not classify on its own.
+func TestRefTypeForEvent(t *testing.T) {
+	for _, test := range []struct {
+		event, want string
+	}{
+		{event: "tag", want: "tag"},
+		{event: "pull_request", want: "pr"},
+		{event: "branch", want: "branch"},
+		{event: "push", want: "branch"},
+		{event: "commit", want: "branch"},
+		{event: "", want: "branch"},
+	} {
+		t.Run(test.event, func(t *testing.T) {
+			assert.Equal(t, test.want, refTypeForEvent(test.event))
+		})
+	}
+}
+
 func TestTryWriteRefTypePRFromBuildEvent(t *testing.T) {
 	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
 
 	output := filepath.Join(t.TempDir(), "metadata.json")
 	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
 	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
-	t.Setenv("DRONE_BUILD_EVENT", "pull_request")
 	t.Setenv("DRONE_COMMIT_BRANCH", "main")
-	t.Setenv("DRONE_PULL_REQUEST", "7")
-	t.Setenv("DRONE_TAG", "")
-	t.Setenv("DRONE_COMMIT_REF", "")
 
-	require.NoError(t, TryWrite(workdir))
+	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "pull_request"}))
 	got := readMetadata(t, output)
 	assert.Equal(t, "pr", got.RefType)
 }
@@ -90,13 +103,9 @@ func TestTryWriteRefTypeBranch(t *testing.T) {
 	output := filepath.Join(t.TempDir(), "metadata.json")
 	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
 	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
-	t.Setenv("DRONE_BUILD_EVENT", "push")
 	t.Setenv("DRONE_COMMIT_BRANCH", "main")
-	t.Setenv("DRONE_PULL_REQUEST", "")
-	t.Setenv("DRONE_TAG", "")
-	t.Setenv("DRONE_COMMIT_REF", "")
 
-	require.NoError(t, TryWrite(workdir))
+	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "push"}))
 	got := readMetadata(t, output)
 	assert.Equal(t, "branch", got.RefType)
 }
@@ -112,22 +121,22 @@ func TestTryWriteBranchClone(t *testing.T) {
 	t.Setenv("HARNESS_CI_EXPLICIT_GIT_CLONE_STEP", "true")
 	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
 	t.Setenv("DRONE_REMOTE_URL", "https://user:token@github.com/acme/app.git")
-	t.Setenv("DRONE_BUILD_EVENT", "push")
 	t.Setenv("DRONE_COMMIT_BRANCH", "main")
-	t.Setenv("DRONE_TAG", "")
-	t.Setenv("DRONE_COMMIT_REF", "")
 	t.Setenv("DRONE_COMMIT_SHA", "")
 
 	before := time.Now().UnixMilli()
-	require.NoError(t, TryWrite(workdir))
+	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "push", LinesOfCode: int64Ptr(48210), FileCount: int64Ptr(12)}))
 	after := time.Now().UnixMilli()
 
 	got := readMetadata(t, output)
 	assert.Equal(t, "https://github.com/acme/app", got.RepoURL)
 	assert.Equal(t, sha, got.CommitSHA)
 	assert.Equal(t, "branch", got.RefType)
+	// LinesOfCode is a pass-through of the binary's scc metrics, not counted here.
 	require.NotNil(t, got.LinesOfCode)
-	assert.Equal(t, int64(4), *got.LinesOfCode)
+	assert.Equal(t, int64(48210), *got.LinesOfCode)
+	require.NotNil(t, got.FileCount)
+	assert.Equal(t, int64(12), *got.FileCount)
 	assert.Equal(t, "main", got.Branch)
 	assert.Empty(t, got.Tag)
 	assert.Equal(t, "app", got.RepoName)
@@ -135,6 +144,23 @@ func TestTryWriteBranchClone(t *testing.T) {
 	assert.GreaterOrEqual(t, got.Timestamp, before)
 	assert.LessOrEqual(t, got.Timestamp, after)
 	assert.NotContains(t, string(mustRead(t, output)), "token")
+}
+
+// When the shared scc pass did not run (telemetry disabled or failed), the
+// receipt omits linesOfCode instead of recording a misleading zero.
+func TestTryWriteOmitsLinesOfCodeWhenNotProvided(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+
+	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "push"}))
+	got := readMetadata(t, output)
+	assert.Nil(t, got.LinesOfCode)
+	assert.NotContains(t, string(mustRead(t, output)), "linesOfCode")
+	assert.NotContains(t, string(mustRead(t, output)), "fileCount")
 }
 
 func TestTryWriteTagClone(t *testing.T) {
@@ -146,12 +172,11 @@ func TestTryWriteTagClone(t *testing.T) {
 	t.Setenv("HARNESS_CI_EXPLICIT_GIT_CLONE_STEP", "true")
 	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
 	t.Setenv("DRONE_REMOTE_URL", "git@github.com:acme/app.git")
-	t.Setenv("DRONE_BUILD_EVENT", "tag")
 	t.Setenv("DRONE_COMMIT_BRANCH", "")
 	t.Setenv("DRONE_TAG", "v1.2.3")
 	t.Setenv("DRONE_COMMIT_REF", "refs/tags/v1.2.3")
 
-	require.NoError(t, TryWrite(workdir))
+	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "tag", LinesOfCode: int64Ptr(1)}))
 	got := readMetadata(t, output)
 	assert.Equal(t, "git@github.com:acme/app", got.RepoURL)
 	assert.Equal(t, "tag", got.RefType)
@@ -171,13 +196,12 @@ func TestTryWritePullRequestUsesCheckedOutBranch(t *testing.T) {
 	t.Setenv("HARNESS_CI_EXPLICIT_GIT_CLONE_STEP", "true")
 	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
 	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
-	t.Setenv("DRONE_BUILD_EVENT", "pull_request")
 	t.Setenv("DRONE_COMMIT_BRANCH", "feature")
 	t.Setenv("DRONE_SOURCE_BRANCH", "somewhere-else")
 	t.Setenv("DRONE_TAG", "stale")
 	t.Setenv("DRONE_COMMIT_REF", "refs/pull/7/head")
 
-	require.NoError(t, TryWrite(workdir))
+	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "pull_request"}))
 	got := readMetadata(t, output)
 	assert.Equal(t, "pr", got.RefType)
 	assert.Equal(t, "feature", got.Branch)
@@ -192,12 +216,11 @@ func TestTryWriteTagFromRefWhenEnvTagEmpty(t *testing.T) {
 	t.Setenv("HARNESS_CI_EXPLICIT_GIT_CLONE_STEP", "true")
 	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
 	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
-	t.Setenv("DRONE_BUILD_EVENT", "tag")
 	t.Setenv("DRONE_COMMIT_BRANCH", "main")
 	t.Setenv("DRONE_TAG", "")
 	t.Setenv("DRONE_COMMIT_REF", "refs/tags/v9")
 
-	require.NoError(t, TryWrite(workdir))
+	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "tag"}))
 	got := readMetadata(t, output)
 	assert.Equal(t, "tag", got.RefType)
 	assert.Empty(t, got.Branch)
@@ -216,7 +239,7 @@ func TestTryWriteWritesRegardlessOfExplicitMarker(t *testing.T) {
 	t.Setenv("DRONE_TAG", "")
 	t.Setenv("DRONE_COMMIT_REF", "")
 
-	require.NoError(t, TryWrite(workdir))
+	require.NoError(t, TryWrite(workdir, Inputs{}))
 	assert.FileExists(t, output)
 }
 
@@ -226,7 +249,7 @@ func TestTryWriteSkipsWithoutMetadataFilePath(t *testing.T) {
 	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", "")
 	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
 
-	require.NoError(t, TryWrite(workdir))
+	require.NoError(t, TryWrite(workdir, Inputs{}))
 }
 
 func TestTryWriteSkipsWhenNothingToRecord(t *testing.T) {
@@ -235,7 +258,7 @@ func TestTryWriteSkipsWhenNothingToRecord(t *testing.T) {
 	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
 	t.Setenv("DRONE_REMOTE_URL", "")
 	t.Setenv("DRONE_COMMIT_SHA", "")
-	require.NoError(t, TryWrite(t.TempDir()))
+	require.NoError(t, TryWrite(t.TempDir(), Inputs{}))
 	assert.NoFileExists(t, output)
 }
 
@@ -248,7 +271,7 @@ func TestTryWriteSkipsWhenCommitShaMissing(t *testing.T) {
 	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
 	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
 	t.Setenv("DRONE_COMMIT_SHA", "")
-	require.NoError(t, TryWrite(t.TempDir()))
+	require.NoError(t, TryWrite(t.TempDir(), Inputs{}))
 	assert.NoFileExists(t, output)
 }
 
@@ -259,7 +282,7 @@ func TestTryWriteSkipsWhenRepoUrlMissing(t *testing.T) {
 	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
 	t.Setenv("DRONE_REMOTE_URL", "")
 	t.Setenv("DRONE_COMMIT_SHA", "abc123")
-	require.NoError(t, TryWrite(t.TempDir()))
+	require.NoError(t, TryWrite(t.TempDir(), Inputs{}))
 	assert.NoFileExists(t, output)
 }
 
@@ -277,7 +300,7 @@ func TestTryWriteScmTypeFromEnv(t *testing.T) {
 	t.Setenv("DRONE_TAG", "")
 	t.Setenv("DRONE_COMMIT_REF", "")
 
-	require.NoError(t, TryWrite(workdir))
+	require.NoError(t, TryWrite(workdir, Inputs{}))
 	got := readMetadata(t, output)
 	assert.Equal(t, "AzureRepo", got.SCMType)
 	assert.Equal(t, "myorg", got.OrgName)
@@ -292,7 +315,7 @@ func TestTryWriteReportsFileError(t *testing.T) {
 	t.Setenv("DRONE_BUILD_EVENT", "push")
 	t.Setenv("DRONE_COMMIT_BRANCH", "main")
 	t.Setenv("DRONE_TAG", "")
-	err := TryWrite(workdir)
+	err := TryWrite(workdir, Inputs{})
 	require.ErrorContains(t, err, "failed to write explicit git clone metadata file")
 }
 
@@ -370,7 +393,7 @@ func TestTryWritePullRequestReceipt(t *testing.T) {
 	t.Setenv("DRONE_COMMIT_REF", "refs/pull/17/head")
 	t.Setenv("DRONE_TAG", "")
 
-	require.NoError(t, TryWrite(workdir))
+	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "pull_request"}))
 	got := readMetadata(t, output)
 	assert.Equal(t, "pr", got.RefType)
 	require.NotNil(t, got.PRNumber)
@@ -380,6 +403,8 @@ func TestTryWritePullRequestReceipt(t *testing.T) {
 	assert.Equal(t, "app", got.RepoName)
 	assert.Greater(t, got.Timestamp, int64(0))
 }
+
+func int64Ptr(v int64) *int64 { return &v }
 
 func initRepo(t *testing.T, files map[string]string) string {
 	t.Helper()

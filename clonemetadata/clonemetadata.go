@@ -17,11 +17,6 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-// emptyTree is git's well-known empty tree. Diffing it against HEAD counts every
-// text line in the commit that was just checked out. Binaries show up as "-" and
-// are skipped.
-const emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-
 // Metadata is the JSON receipt written to HARNESS_GIT_CLONE_METADATA_FILE.
 type Metadata struct {
 	RepoURL     string `json:"repoUrl"`
@@ -29,6 +24,7 @@ type Metadata struct {
 	RefType     string `json:"refType,omitempty"`
 	PRNumber    *int64 `json:"prNumber,omitempty"`
 	LinesOfCode *int64 `json:"linesOfCode,omitempty"`
+	FileCount   *int64 `json:"fileCount,omitempty"`
 	Branch      string `json:"branch,omitempty"`
 	Tag         string `json:"tag,omitempty"`
 	RepoName    string `json:"repoName,omitempty"`
@@ -37,21 +33,38 @@ type Metadata struct {
 	SCMType     string `json:"scmType,omitempty"`
 }
 
+// Inputs carries values the drone-git binary already computes for its own
+// telemetry pass; reusing them keeps one definition of lines-of-code and ref
+// type per clone instead of the receipt counting and classifying again.
+type Inputs struct {
+	// LinesOfCode and FileCount are scc totals from the binary's metrics pass
+	// (metrics.Lines / metrics.Files). Nil when the pass was disabled
+	// (DISABLE_SCC_METRICS / CI_DISABLE_TELEMETRY) or failed, which omits the
+	// fields from the receipt. FileCount is files scc analysed, not git ls-files:
+	// vendor, node_modules, .git and oversized files are excluded, same as loc.
+	LinesOfCode *int64
+	FileCount   *int64
+	// BuildEvent is the binary's getBuildEventInfo classification of
+	// DRONE_BUILD_EVENT: tag, pull_request, branch, push or commit.
+	BuildEvent string
+}
+
 // TryWrite writes the clone receipt for a Git Clone step (explicit or implicit).
 //
 // It is a no-op unless HARNESS_GIT_CLONE_METADATA_FILE is set; the addon
 // injects that path on every step container, and only drone-git writes the file.
-// refType is computed here: tag when a tag was checked out, pr when a PR number
-// is resolvable, branch otherwise. The caller logs errors and does not fail the step.
-func TryWrite(workdir string) error {
+// refType comes from the caller's build-event classification (the same source
+// the clone scripts' CLONE_TYPE uses). The caller logs errors and does not fail
+// the step.
+func TryWrite(workdir string, in Inputs) error {
 	metadataFile := os.Getenv("HARNESS_GIT_CLONE_METADATA_FILE")
 	if metadataFile == "" {
 		slog.Debug("No HARNESS_GIT_CLONE_METADATA_FILE specified, skipping clone metadata")
 		return nil
 	}
 
-	// Stamp before the git lookups. Line counting walks the tree and must not
-	// move the timestamp past the moment the clone itself finished.
+	// Stamp before the git lookups so ref resolution cannot move the timestamp
+	// past the moment the clone itself finished.
 	timestamp := time.Now().UnixMilli()
 
 	scmType := strings.TrimSpace(os.Getenv("DRONE_REPO_SCM"))
@@ -65,29 +78,19 @@ func TryWrite(workdir string) error {
 	}
 
 	branch, tag := resolveBranchAndTag(workdir)
-	refType := "branch"
 	var prNumberPtr *int64
-	if tag != "" {
-		refType = "tag"
-	} else if n, ok := resolvePRNumber(); ok {
-		refType = "pr"
+	if n, ok := resolvePRNumber(); ok {
 		prNumberPtr = &n
 	}
 	orgName, repoName := parseRepoIdentity(repoURL, scmType)
-	linesOfCode, err := countLinesOfCode(workdir)
-	var linesOfCodePtr *int64
-	if err != nil {
-		slog.Warn("Failed to count lines of code, recording 0", "error", err)
-	} else {
-		linesOfCodePtr = &linesOfCode
-	}
 
 	metadata := Metadata{
 		RepoURL:     repoURL,
 		CommitSHA:   commitSHA,
-		RefType:     refType,
+		RefType:     refTypeForEvent(in.BuildEvent),
 		PRNumber:    prNumberPtr,
-		LinesOfCode: linesOfCodePtr,
+		LinesOfCode: in.LinesOfCode,
+		FileCount:   in.FileCount,
 		Branch:      branch,
 		Tag:         tag,
 		RepoName:    repoName,
@@ -105,13 +108,13 @@ func TryWrite(workdir string) error {
 	}
 
 	slog.Info("Wrote git clone metadata",
-		"file", metadataFile,
 		"repoUrl", repoURL,
 		"commitSha", commitSHA,
 		"refType", metadata.RefType,
 		"PRNumber", metadata.PRNumber,
 		"SCMType", metadata.SCMType,
-		"linesOfCode", linesOfCode,
+		"linesOfCode", metadata.LinesOfCode,
+		"fileCount", metadata.FileCount,
 		"branch", branch,
 		"tag", tag,
 		"repoName", repoName,
@@ -176,29 +179,17 @@ func gitOutput(workdir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// countLinesOfCode sums text lines in the checked-out commit. git diff against
-// the empty tree lists added lines per file; "-" marks a binary and is ignored.
-func countLinesOfCode(workdir string) (int64, error) {
-	cmd := exec.Command("git", "diff", "--numstat", emptyTree, "HEAD")
-	cmd.Dir = workdir
-	out, err := cmd.Output()
-	if err != nil {
-		return 0, err
+// refTypeForEvent maps the binary's build-event classification (getBuildEventInfo,
+// the same source the clone scripts' CLONE_TYPE uses) onto the receipt's wire values.
+func refTypeForEvent(buildEvent string) string {
+	switch buildEvent {
+	case "tag":
+		return "tag"
+	case "pull_request":
+		return "pr"
+	default: // branch, push, commit, empty
+		return "branch"
 	}
-
-	var total int64
-	for _, line := range strings.Split(string(out), "\n") {
-		fields := strings.Split(line, "\t")
-		if len(fields) == 0 || fields[0] == "" || fields[0] == "-" {
-			continue
-		}
-		n, err := strconv.ParseInt(fields[0], 10, 64)
-		if err != nil {
-			continue
-		}
-		total += n
-	}
-	return total, nil
 }
 
 // sanitizeRepoURL strips embedded credentials (user:password@) from the clone URL.

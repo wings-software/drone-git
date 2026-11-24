@@ -372,8 +372,9 @@ func executeBuildToolScript(workdir string) error {
 	return nil
 }
 
-// tryCollectAndWriteMetrics attempts to collect code metrics and write build tool file
-func tryCollectAndWriteMetrics(workdir string) error {
+// tryCollectAndWriteMetrics writes the build tool file; metrics come from the
+// single scc pass in main, and nil means that pass was disabled or failed.
+func tryCollectAndWriteMetrics(workdir string, metrics *CodeMetrics) error {
 	buildToolFile := os.Getenv("PLUGIN_BUILD_TOOL_FILE")
 	if buildToolFile == "" {
 		slog.Debug("No PLUGIN_BUILD_TOOL_FILE specified, skipping metrics collection")
@@ -409,10 +410,10 @@ func tryCollectAndWriteMetrics(workdir string) error {
 	harnessLang, _ := existingData["harness_lang"].(string)
 	harnessBuildTool, _ := existingData["harness_build_tool"].(string)
 
-	// Collect SCC metrics only if not specifically disabled
-	var metrics *CodeMetrics
-	if os.Getenv("DISABLE_SCC_METRICS") != "" {
-		slog.Debug("Metrics disabled, using empty metrics")
+	// A nil pass-through means the shared scc pass was disabled
+	// (DISABLE_SCC_METRICS / CI_DISABLE_TELEMETRY) or failed; record zeros.
+	if metrics == nil {
+		slog.Debug("No metrics from the shared scc pass, using empty metrics")
 		metrics = &CodeMetrics{
 			Lines:      0,
 			Code:       0,
@@ -421,22 +422,6 @@ func tryCollectAndWriteMetrics(workdir string) error {
 			Complexity: 0,
 			Files:      0,
 			Languages:  make(map[string]LanguageMetrics),
-		}
-	} else {
-		var err error
-		metrics, err = collectCodeMetrics(workdir)
-		if err != nil {
-			slog.Warn("Failed to collect metrics", "error", err)
-			// Use empty metrics if scc fails
-			metrics = &CodeMetrics{
-				Lines:      0,
-				Code:       0,
-				Comments:   0,
-				Blanks:     0,
-				Complexity: 0,
-				Files:      0,
-				Languages:  make(map[string]LanguageMetrics),
-			}
 		}
 	}
 
@@ -488,7 +473,7 @@ func collectAndWriteMetrics(workdir string) {
 		defer cleanupTempDir() // Cleanup after test
 	}
 
-	if err := tryCollectAndWriteMetrics(workdir); err != nil {
+	if err := tryCollectAndWriteMetrics(workdir, collectMetricsIfEnabled(workdir)); err != nil {
 		slog.Warn("Metrics collection failed", "error", err)
 	}
 }
@@ -612,16 +597,58 @@ func main() {
 		return // Analytics failure - don't fail the step, just skip
 	}
 
+	// Collect scc metrics and the build event once per clone; the clone receipt
+	// and the build-tool telemetry file share both results.
+	metrics := collectMetricsIfEnabled(workdir)
+	buildEvent, _ := getBuildEventInfo()
+
 	// Write clone metadata for Git Clone steps (optional, fail-open - CI-25945)
-	if err := clonemetadata.TryWrite(workdir); err != nil {
+	if err := clonemetadata.TryWrite(workdir, clonemetadata.Inputs{
+		LinesOfCode: linesOfCode(metrics),
+		FileCount:   fileCount(metrics),
+		BuildEvent:  buildEvent,
+	}); err != nil {
 		slog.Warn("Git clone metadata write failed but continuing", "error", err)
 		// Continue - don't fail the step for metadata issues
 	}
 
-	// Collect code metrics and write complete build tool file
+	// Write complete build tool file
 	// Note: Analytics failures should not fail the step
-	if err := tryCollectAndWriteMetrics(workdir); err != nil {
+	if err := tryCollectAndWriteMetrics(workdir, metrics); err != nil {
 		slog.Warn("Metrics collection failed but continuing (analytics only)", "error", err)
 		// Continue - don't fail the step for analytics issues
 	}
+}
+
+// collectMetricsIfEnabled runs the scc pass once per clone when the telemetry
+// kill switches allow it; nil means disabled or failed.
+func collectMetricsIfEnabled(workdir string) *CodeMetrics {
+	if os.Getenv("CI_DISABLE_TELEMETRY") != "" || os.Getenv("DISABLE_SCC_METRICS") != "" {
+		return nil
+	}
+	metrics, err := collectCodeMetrics(workdir)
+	if err != nil {
+		slog.Warn("Failed to collect metrics", "error", err)
+		return nil
+	}
+	return metrics
+}
+
+// linesOfCode flattens the scc totals for the clone receipt; nil when the
+// metrics pass did not run so the field is omitted rather than recorded as zero.
+func linesOfCode(metrics *CodeMetrics) *int64 {
+	if metrics == nil {
+		return nil
+	}
+	loc := metrics.Lines
+	return &loc
+}
+
+// fileCount is scc's analysed-file total (metrics.Files) for the clone receipt.
+func fileCount(metrics *CodeMetrics) *int64 {
+	if metrics == nil {
+		return nil
+	}
+	n := metrics.Files
+	return &n
 }

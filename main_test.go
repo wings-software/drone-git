@@ -133,6 +133,17 @@ func TestMainCloneMetadata(t *testing.T) {
 	}
 }
 
+func TestCloneReceiptMetricPtrs(t *testing.T) {
+	assert.Nil(t, linesOfCode(nil))
+	assert.Nil(t, fileCount(nil))
+
+	metrics := &CodeMetrics{Lines: 48210, Files: 12}
+	require.NotNil(t, linesOfCode(metrics))
+	assert.Equal(t, int64(48210), *linesOfCode(metrics))
+	require.NotNil(t, fileCount(metrics))
+	assert.Equal(t, int64(12), *fileCount(metrics))
+}
+
 func TestRunGitCloneInvalidTempDirectory(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "file")
 	require.NoError(t, os.WriteFile(path, nil, 0600))
@@ -245,13 +256,13 @@ func TestMetadataUnavailable(t *testing.T) {
 
 	// Analytics must not run before clone scripts have been initialized.
 	require.ErrorContains(t, executeBuildToolScript(root), "temp directory not initialized")
-	require.NoError(t, tryCollectAndWriteMetrics(root))
+	require.NoError(t, tryCollectAndWriteMetrics(root, nil))
 	assert.NoFileExists(t, output)
 
 	// A missing provider script and malformed output still produce valid fallback JSON.
 	globalTmpDir = t.TempDir()
 	require.NoError(t, os.WriteFile(output, []byte("invalid JSON"), 0600))
-	require.NoError(t, tryCollectAndWriteMetrics(root))
+	require.NoError(t, tryCollectAndWriteMetrics(root, nil))
 	contents, err := os.ReadFile(output)
 	require.NoError(t, err)
 	var data BuildToolData
