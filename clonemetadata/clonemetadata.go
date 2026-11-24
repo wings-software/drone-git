@@ -38,9 +38,9 @@ type Metadata struct {
 // type per clone instead of the receipt counting and classifying again.
 type Inputs struct {
 	// LinesOfCode and FileCount are scc totals from the binary's metrics pass
-	// (metrics.Lines / metrics.Files). Nil when the pass was disabled
-	// (DISABLE_SCC_METRICS / CI_DISABLE_TELEMETRY) or failed, which omits the
-	// fields from the receipt. FileCount is files scc analysed, not git ls-files:
+	// (metrics.Lines / metrics.Files). Prefer the shared telemetry scan; if
+	// that pass was skipped the caller falls back to a receipt-only scan.
+	// Nil omits the fields. FileCount is files scc analysed, not git ls-files:
 	// vendor, node_modules, .git and oversized files are excluded, same as loc.
 	LinesOfCode *int64
 	FileCount   *int64
@@ -77,7 +77,7 @@ func TryWrite(workdir string, in Inputs) error {
 		return nil
 	}
 
-	branch, tag := resolveBranchAndTag(workdir)
+	branch, tag := resolveBranchAndTag(workdir, in.BuildEvent)
 	var prNumberPtr *int64
 	if n, ok := resolvePRNumber(); ok {
 		prNumberPtr = &n
@@ -124,11 +124,7 @@ func TryWrite(workdir string, in Inputs) error {
 	return nil
 }
 
-// resolveBranchAndTag reports the ref this clone actually checked out.
-// A tag checkout (DRONE_BUILD_EVENT=tag, or refs/tags/...) leaves HEAD detached,
-// so the branch is empty and the tag is the one that was fetched. A PR checkout
-// is detached too; there the branch is the PR's source branch from the env.
-func resolveBranchAndTag(workdir string) (string, string) {
+func resolveBranchAndTag(workdir, buildEvent string) (string, string) {
 	envBranch := strings.TrimSpace(os.Getenv("DRONE_COMMIT_BRANCH"))
 	envTag := strings.TrimSpace(os.Getenv("DRONE_TAG"))
 	ref := strings.TrimSpace(os.Getenv("DRONE_COMMIT_REF"))
@@ -146,15 +142,19 @@ func resolveBranchAndTag(workdir string) (string, string) {
 		return "", tag
 	}
 
-	if checkedOut == "" {
-		if os.Getenv("DRONE_BUILD_EVENT") == "pull_request" {
-			if src := strings.TrimSpace(os.Getenv("DRONE_SOURCE_BRANCH")); src != "" {
-				return src, ""
-			}
+	if isPullRequestEvent(buildEvent) {
+		if src := strings.TrimSpace(os.Getenv("DRONE_SOURCE_BRANCH")); src != "" {
+			return src, ""
 		}
+	}
+	if checkedOut == "" {
 		return envBranch, ""
 	}
 	return checkedOut, ""
+}
+
+func isPullRequestEvent(buildEvent string) bool {
+	return buildEvent == "pull_request" || os.Getenv("DRONE_BUILD_EVENT") == "pull_request"
 }
 
 // resolveCommitSHA returns the commit the clone scripts actually checked out.
@@ -205,6 +205,11 @@ func sanitizeRepoURL(rawURL string) string {
 	u, err := url.Parse(rawURL)
 	if err != nil || u == nil || u.User == nil {
 		return rawURL
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https":
+		u.User = nil
+		return u.String()
 	}
 	if _, hasPassword := u.User.Password(); !hasPassword {
 		return rawURL

@@ -133,6 +133,17 @@ func TestMainCloneMetadata(t *testing.T) {
 	}
 }
 
+func TestMetricsForReceiptReusesTelemetry(t *testing.T) {
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", filepath.Join(t.TempDir(), "receipt.json"))
+	telemetry := &CodeMetrics{Lines: 99, Files: 3}
+	assert.Equal(t, telemetry, metricsForReceipt(telemetry, t.TempDir()))
+}
+
+func TestMetricsForReceiptFallsBackWhenTelemetryNil(t *testing.T) {
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", "")
+	assert.Nil(t, metricsForReceipt(nil, t.TempDir()))
+}
+
 func TestCloneReceiptMetricPtrs(t *testing.T) {
 	assert.Nil(t, linesOfCode(nil))
 	assert.Nil(t, fileCount(nil))

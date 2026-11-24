@@ -598,14 +598,18 @@ func main() {
 	}
 
 	// Collect scc metrics and the build event once per clone; the clone receipt
-	// and the build-tool telemetry file share both results.
+	// and the build-tool telemetry file share both results when telemetry is on.
 	metrics := collectMetricsIfEnabled(workdir)
 	buildEvent, _ := getBuildEventInfo()
 
+	// Receipt loc/fileCount reuse telemetry scc when it ran; if kill switches
+	// dropped that pass, fall back to a receipt-only scan.
+	receiptMetrics := metricsForReceipt(metrics, workdir)
+
 	// Write clone metadata for Git Clone steps (optional, fail-open - CI-25945)
 	if err := clonemetadata.TryWrite(workdir, clonemetadata.Inputs{
-		LinesOfCode: linesOfCode(metrics),
-		FileCount:   fileCount(metrics),
+		LinesOfCode: linesOfCode(receiptMetrics),
+		FileCount:   fileCount(receiptMetrics),
 		BuildEvent:  buildEvent,
 	}); err != nil {
 		slog.Warn("Git clone metadata write failed but continuing", "error", err)
@@ -620,15 +624,41 @@ func main() {
 	}
 }
 
-// collectMetricsIfEnabled runs the scc pass once per clone when the telemetry
-// kill switches allow it; nil means disabled or failed.
+// collectMetricsIfEnabled runs the scc pass once per clone when a consumer
+// will use the result (build-tool file or clone receipt) and the telemetry
+// kill switches allow it; nil means skipped, disabled, or failed.
 func collectMetricsIfEnabled(workdir string) *CodeMetrics {
+	if os.Getenv("PLUGIN_BUILD_TOOL_FILE") == "" && os.Getenv("HARNESS_GIT_CLONE_METADATA_FILE") == "" {
+		return nil
+	}
 	if os.Getenv("CI_DISABLE_TELEMETRY") != "" || os.Getenv("DISABLE_SCC_METRICS") != "" {
 		return nil
 	}
 	metrics, err := collectCodeMetrics(workdir)
 	if err != nil {
 		slog.Warn("Failed to collect metrics", "error", err)
+		return nil
+	}
+	return metrics
+}
+
+// metricsForReceipt reuses the telemetry scc pass when it ran. If that pass
+// was skipped (CI_DISABLE_TELEMETRY / DISABLE_SCC_METRICS), fall back to a
+// receipt-only scan so loc/fileCount are not tied to those flags.
+func metricsForReceipt(telemetry *CodeMetrics, workdir string) *CodeMetrics {
+	if telemetry != nil {
+		return telemetry
+	}
+	return collectMetricsForReceipt(workdir)
+}
+
+func collectMetricsForReceipt(workdir string) *CodeMetrics {
+	if os.Getenv("HARNESS_GIT_CLONE_METADATA_FILE") == "" {
+		return nil
+	}
+	metrics, err := collectCodeMetrics(workdir)
+	if err != nil {
+		slog.Warn("Failed to collect metrics for clone receipt", "error", err)
 		return nil
 	}
 	return metrics

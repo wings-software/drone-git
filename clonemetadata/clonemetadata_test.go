@@ -60,8 +60,11 @@ func TestParseRepoIdentity(t *testing.T) {
 
 func TestSanitizeRepoURL(t *testing.T) {
 	assert.Equal(t, "https://github.com/acme/app.git", sanitizeRepoURL("https://user:token@github.com/acme/app.git"))
+	assert.Equal(t, "https://github.com/acme/app.git", sanitizeRepoURL("https://ghs_token@github.com/acme/app.git"))
+	assert.Equal(t, "http://github.com/acme/app.git", sanitizeRepoURL("http://ghs_token@github.com/acme/app.git"))
 	assert.Equal(t, "git@github.com:acme/app.git", sanitizeRepoURL("git@github.com:acme/app.git"))
 	assert.Equal(t, "ssh://git@github.com/acme/app.git", sanitizeRepoURL("ssh://git@github.com/acme/app.git"))
+	assert.Equal(t, "ssh://github.com/acme/app.git", sanitizeRepoURL("ssh://git:pass@github.com/acme/app.git"))
 	assert.Equal(t, "", sanitizeRepoURL(""))
 }
 
@@ -189,23 +192,26 @@ func TestTryWriteTagClone(t *testing.T) {
 	assert.Equal(t, int64(1), *got.LinesOfCode)
 }
 
-func TestTryWritePullRequestUsesCheckedOutBranch(t *testing.T) {
+// clone-pull-request checks out DRONE_COMMIT_BRANCH (the target) then merges
+// the PR, so gitAbbrevRef returns "main". The receipt still records the PR's
+// source branch.
+func TestTryWritePullRequestUsesSourceBranchOverCheckedOutTarget(t *testing.T) {
 	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
-	git(t, workdir, "checkout", "-b", "feature")
 
 	output := filepath.Join(t.TempDir(), "metadata.json")
 	t.Setenv("HARNESS_CI_EXPLICIT_GIT_CLONE_STEP", "true")
 	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
 	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
-	t.Setenv("DRONE_COMMIT_BRANCH", "feature")
-	t.Setenv("DRONE_SOURCE_BRANCH", "somewhere-else")
+	t.Setenv("DRONE_BUILD_EVENT", "pull_request")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_SOURCE_BRANCH", "feature-x")
 	t.Setenv("DRONE_TAG", "stale")
-	t.Setenv("DRONE_COMMIT_REF", "refs/pull/7/head")
+	t.Setenv("DRONE_COMMIT_REF", "refs/merge-requests/1/head")
 
 	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "pull_request"}))
 	got := readMetadata(t, output)
 	assert.Equal(t, "pr", got.RefType)
-	assert.Equal(t, "feature", got.Branch)
+	assert.Equal(t, "feature-x", got.Branch)
 	assert.Empty(t, got.Tag)
 }
 
