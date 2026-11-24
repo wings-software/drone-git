@@ -61,6 +61,7 @@ func TestParseRepoIdentity(t *testing.T) {
 func TestSanitizeRepoURL(t *testing.T) {
 	assert.Equal(t, "https://github.com/acme/app.git", sanitizeRepoURL("https://user:token@github.com/acme/app.git"))
 	assert.Equal(t, "git@github.com:acme/app.git", sanitizeRepoURL("git@github.com:acme/app.git"))
+	assert.Equal(t, "ssh://git@github.com/acme/app.git", sanitizeRepoURL("ssh://git@github.com/acme/app.git"))
 	assert.Equal(t, "", sanitizeRepoURL(""))
 }
 
@@ -380,15 +381,20 @@ func TestResolvePRNumberAbsent(t *testing.T) {
 }
 
 // A PR clone: prNumber lands in the receipt and refType resolves to pr.
+// A real PR clone is detached, so the branch comes from the env; on
+// pull_request events that is DRONE_SOURCE_BRANCH (the PR's own branch), not
+// DRONE_COMMIT_BRANCH (the target branch).
 func TestTryWritePullRequestReceipt(t *testing.T) {
 	workdir := initRepo(t, map[string]string{"f.txt": "a\nb\n"})
 	sha := git(t, workdir, "rev-parse", "HEAD")
+	git(t, workdir, "checkout", "--detach", "HEAD")
 
 	output := filepath.Join(t.TempDir(), "metadata.json")
 	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
 	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
 	t.Setenv("DRONE_BUILD_EVENT", "pull_request")
 	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_SOURCE_BRANCH", "feature-17")
 	t.Setenv("DRONE_PULL_REQUEST", "17")
 	t.Setenv("DRONE_COMMIT_REF", "refs/pull/17/head")
 	t.Setenv("DRONE_TAG", "")
@@ -396,12 +402,33 @@ func TestTryWritePullRequestReceipt(t *testing.T) {
 	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "pull_request"}))
 	got := readMetadata(t, output)
 	assert.Equal(t, "pr", got.RefType)
+	assert.Equal(t, "feature-17", got.Branch)
 	require.NotNil(t, got.PRNumber)
 	assert.Equal(t, int64(17), *got.PRNumber)
 	assert.Equal(t, sha, got.CommitSHA)
 	assert.Equal(t, "acme", got.OrgName)
 	assert.Equal(t, "app", got.RepoName)
 	assert.Greater(t, got.Timestamp, int64(0))
+}
+
+// Without DRONE_SOURCE_BRANCH a detached PR checkout still falls back to
+// DRONE_COMMIT_BRANCH (the target branch).
+func TestTryWritePullRequestDetachedNoSourceBranch(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+	git(t, workdir, "checkout", "--detach", "HEAD")
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_BUILD_EVENT", "pull_request")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_COMMIT_REF", "refs/pull/9/head")
+	t.Setenv("DRONE_TAG", "")
+
+	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "pull_request"}))
+	got := readMetadata(t, output)
+	assert.Equal(t, "pr", got.RefType)
+	assert.Equal(t, "main", got.Branch)
 }
 
 func int64Ptr(v int64) *int64 { return &v }

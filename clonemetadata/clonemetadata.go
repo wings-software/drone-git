@@ -126,7 +126,8 @@ func TryWrite(workdir string, in Inputs) error {
 
 // resolveBranchAndTag reports the ref this clone actually checked out.
 // A tag checkout (DRONE_BUILD_EVENT=tag, or refs/tags/...) leaves HEAD detached,
-// so the branch is empty and the tag is the one that was fetched.
+// so the branch is empty and the tag is the one that was fetched. A PR checkout
+// is detached too; there the branch is the PR's source branch from the env.
 func resolveBranchAndTag(workdir string) (string, string) {
 	envBranch := strings.TrimSpace(os.Getenv("DRONE_COMMIT_BRANCH"))
 	envTag := strings.TrimSpace(os.Getenv("DRONE_TAG"))
@@ -146,6 +147,11 @@ func resolveBranchAndTag(workdir string) (string, string) {
 	}
 
 	if checkedOut == "" {
+		if os.Getenv("DRONE_BUILD_EVENT") == "pull_request" {
+			if src := strings.TrimSpace(os.Getenv("DRONE_SOURCE_BRANCH")); src != "" {
+				return src, ""
+			}
+		}
 		return envBranch, ""
 	}
 	return checkedOut, ""
@@ -192,15 +198,15 @@ func refTypeForEvent(buildEvent string) string {
 	}
 }
 
-// sanitizeRepoURL strips embedded credentials (user:password@) from the clone URL.
-// SCP-style SSH URLs (git@host:org/repo.git) are not valid URLs and are returned
-// untouched: git@ is the SSH username, not a credential.
 func sanitizeRepoURL(rawURL string) string {
 	if rawURL == "" {
 		return rawURL
 	}
 	u, err := url.Parse(rawURL)
 	if err != nil || u == nil || u.User == nil {
+		return rawURL
+	}
+	if _, hasPassword := u.User.Password(); !hasPassword {
 		return rawURL
 	}
 	u.User = nil
