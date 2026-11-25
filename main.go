@@ -372,8 +372,8 @@ func executeBuildToolScript(workdir string) error {
 	return nil
 }
 
-// tryCollectAndWriteMetrics writes the build tool file; metrics come from the
-// single scc pass in main, and nil means that pass was disabled or failed.
+// tryCollectAndWriteMetrics writes the build tool file using the shared scc
+// result from main. Nil metrics means that pass was disabled or failed; record zeros.
 func tryCollectAndWriteMetrics(workdir string, metrics *CodeMetrics) error {
 	buildToolFile := os.Getenv("PLUGIN_BUILD_TOOL_FILE")
 	if buildToolFile == "" {
@@ -410,8 +410,6 @@ func tryCollectAndWriteMetrics(workdir string, metrics *CodeMetrics) error {
 	harnessLang, _ := existingData["harness_lang"].(string)
 	harnessBuildTool, _ := existingData["harness_build_tool"].(string)
 
-	// A nil pass-through means the shared scc pass was disabled
-	// (DISABLE_SCC_METRICS / CI_DISABLE_TELEMETRY) or failed; record zeros.
 	if metrics == nil {
 		slog.Debug("No metrics from the shared scc pass, using empty metrics")
 		metrics = &CodeMetrics{
@@ -473,7 +471,15 @@ func collectAndWriteMetrics(workdir string) {
 		defer cleanupTempDir() // Cleanup after test
 	}
 
-	if err := tryCollectAndWriteMetrics(workdir, collectMetricsIfEnabled(workdir)); err != nil {
+	var metrics *CodeMetrics
+	if os.Getenv("CI_DISABLE_TELEMETRY") == "" && os.Getenv("DISABLE_SCC_METRICS") == "" {
+		var err error
+		metrics, err = collectCodeMetrics(workdir)
+		if err != nil {
+			slog.Warn("Failed to collect metrics", "error", err)
+		}
+	}
+	if err := tryCollectAndWriteMetrics(workdir, metrics); err != nil {
 		slog.Warn("Metrics collection failed", "error", err)
 	}
 }
@@ -597,88 +603,33 @@ func main() {
 		return // Analytics failure - don't fail the step, just skip
 	}
 
-	// Collect scc metrics and the build event once per clone; the clone receipt
-	// and the build-tool telemetry file share both results when telemetry is on.
-	metrics := collectMetricsIfEnabled(workdir)
+	// One scc pass per clone; receipt and telemetry share loc/fileCount.
+	var metrics *CodeMetrics
+	if os.Getenv("CI_DISABLE_TELEMETRY") == "" && os.Getenv("DISABLE_SCC_METRICS") == "" &&
+		(os.Getenv("PLUGIN_BUILD_TOOL_FILE") != "" || os.Getenv("HARNESS_GIT_CLONE_METADATA_FILE") != "") {
+		var err error
+		metrics, err = collectCodeMetrics(workdir)
+		if err != nil {
+			slog.Warn("Failed to collect metrics", "error", err)
+		}
+	}
 	buildEvent, _ := getBuildEventInfo()
-
-	// Receipt loc/fileCount reuse telemetry scc when it ran; if kill switches
-	// dropped that pass, fall back to a receipt-only scan.
-	receiptMetrics := metricsForReceipt(metrics, workdir)
-
-	// Write clone metadata for Git Clone steps (optional, fail-open - CI-25945)
+	var loc, files *int64
+	if metrics != nil {
+		loc, files = &metrics.Lines, &metrics.Files
+	}
 	if err := clonemetadata.TryWrite(workdir, clonemetadata.Inputs{
-		LinesOfCode: linesOfCode(receiptMetrics),
-		FileCount:   fileCount(receiptMetrics),
+		LinesOfCode: loc,
+		FileCount:   files,
 		BuildEvent:  buildEvent,
 	}); err != nil {
 		slog.Warn("Git clone metadata write failed but continuing", "error", err)
-		// Continue - don't fail the step for metadata issues
 	}
 
-	// Write complete build tool file
+	// Collect code metrics and write complete build tool file
 	// Note: Analytics failures should not fail the step
 	if err := tryCollectAndWriteMetrics(workdir, metrics); err != nil {
 		slog.Warn("Metrics collection failed but continuing (analytics only)", "error", err)
 		// Continue - don't fail the step for analytics issues
 	}
-}
-
-// collectMetricsIfEnabled runs the scc pass once per clone when a consumer
-// will use the result (build-tool file or clone receipt) and the telemetry
-// kill switches allow it; nil means skipped, disabled, or failed.
-func collectMetricsIfEnabled(workdir string) *CodeMetrics {
-	if os.Getenv("PLUGIN_BUILD_TOOL_FILE") == "" && os.Getenv("HARNESS_GIT_CLONE_METADATA_FILE") == "" {
-		return nil
-	}
-	if os.Getenv("CI_DISABLE_TELEMETRY") != "" || os.Getenv("DISABLE_SCC_METRICS") != "" {
-		return nil
-	}
-	metrics, err := collectCodeMetrics(workdir)
-	if err != nil {
-		slog.Warn("Failed to collect metrics", "error", err)
-		return nil
-	}
-	return metrics
-}
-
-// metricsForReceipt reuses the telemetry scc pass when it ran. If that pass
-// was skipped (CI_DISABLE_TELEMETRY / DISABLE_SCC_METRICS), fall back to a
-// receipt-only scan so loc/fileCount are not tied to those flags.
-func metricsForReceipt(telemetry *CodeMetrics, workdir string) *CodeMetrics {
-	if telemetry != nil {
-		return telemetry
-	}
-	return collectMetricsForReceipt(workdir)
-}
-
-func collectMetricsForReceipt(workdir string) *CodeMetrics {
-	if os.Getenv("HARNESS_GIT_CLONE_METADATA_FILE") == "" {
-		return nil
-	}
-	metrics, err := collectCodeMetrics(workdir)
-	if err != nil {
-		slog.Warn("Failed to collect metrics for clone receipt", "error", err)
-		return nil
-	}
-	return metrics
-}
-
-// linesOfCode flattens the scc totals for the clone receipt; nil when the
-// metrics pass did not run so the field is omitted rather than recorded as zero.
-func linesOfCode(metrics *CodeMetrics) *int64 {
-	if metrics == nil {
-		return nil
-	}
-	loc := metrics.Lines
-	return &loc
-}
-
-// fileCount is scc's analysed-file total (metrics.Files) for the clone receipt.
-func fileCount(metrics *CodeMetrics) *int64 {
-	if metrics == nil {
-		return nil
-	}
-	n := metrics.Files
-	return &n
 }

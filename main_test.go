@@ -133,28 +133,6 @@ func TestMainCloneMetadata(t *testing.T) {
 	}
 }
 
-func TestMetricsForReceiptReusesTelemetry(t *testing.T) {
-	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", filepath.Join(t.TempDir(), "receipt.json"))
-	telemetry := &CodeMetrics{Lines: 99, Files: 3}
-	assert.Equal(t, telemetry, metricsForReceipt(telemetry, t.TempDir()))
-}
-
-func TestMetricsForReceiptFallsBackWhenTelemetryNil(t *testing.T) {
-	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", "")
-	assert.Nil(t, metricsForReceipt(nil, t.TempDir()))
-}
-
-func TestCloneReceiptMetricPtrs(t *testing.T) {
-	assert.Nil(t, linesOfCode(nil))
-	assert.Nil(t, fileCount(nil))
-
-	metrics := &CodeMetrics{Lines: 48210, Files: 12}
-	require.NotNil(t, linesOfCode(metrics))
-	assert.Equal(t, int64(48210), *linesOfCode(metrics))
-	require.NotNil(t, fileCount(metrics))
-	assert.Equal(t, int64(12), *fileCount(metrics))
-}
-
 func TestRunGitCloneInvalidTempDirectory(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "file")
 	require.NoError(t, os.WriteFile(path, nil, 0600))
