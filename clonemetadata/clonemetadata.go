@@ -19,18 +19,21 @@ import (
 
 // Metadata is the JSON receipt written to HARNESS_GIT_CLONE_METADATA_FILE.
 type Metadata struct {
-	RepoURL     string `json:"repoUrl"`
-	CommitSHA   string `json:"commitSha"`
-	RefType     string `json:"refType,omitempty"`
-	PRNumber    *int64 `json:"prNumber,omitempty"`
-	LinesOfCode *int64 `json:"linesOfCode,omitempty"`
-	FileCount   *int64 `json:"fileCount,omitempty"`
-	Branch      string `json:"branch,omitempty"`
-	Tag         string `json:"tag,omitempty"`
-	RepoName    string `json:"repoName,omitempty"`
-	OrgName     string `json:"orgName,omitempty"`
-	Timestamp   int64  `json:"timestamp"`
-	SCMType     string `json:"scmType,omitempty"`
+	RepoURL           string   `json:"repoUrl"`
+	CommitSHA         string   `json:"commitSha"`
+	RefType           string   `json:"refType,omitempty"`
+	PRNumber          *int64   `json:"prNumber,omitempty"`
+	LinesOfCode       *int64   `json:"linesOfCode,omitempty"`
+	FileCount         *int64   `json:"fileCount,omitempty"`
+	Branch            string   `json:"branch,omitempty"`
+	TargetBranch      string   `json:"targetBranch,omitempty"`
+	Tag               string   `json:"tag,omitempty"`
+	RepoName          string   `json:"repoName,omitempty"`
+	OrgName           string   `json:"orgName,omitempty"`
+	Timestamp         int64    `json:"timestamp"`
+	SCMType           string   `json:"scmType,omitempty"`
+	SparseCheckout    []string `json:"sparseCheckout,omitempty"`
+	SubmoduleStrategy string   `json:"submoduleStrategy,omitempty"`
 }
 
 // Inputs carries values the drone-git binary already computes for its own
@@ -85,18 +88,21 @@ func TryWrite(workdir string, in Inputs) error {
 	orgName, repoName := parseRepoIdentity(repoURL, scmType)
 
 	metadata := Metadata{
-		RepoURL:     repoURL,
-		CommitSHA:   commitSHA,
-		RefType:     refTypeForEvent(in.BuildEvent),
-		PRNumber:    prNumberPtr,
-		LinesOfCode: in.LinesOfCode,
-		FileCount:   in.FileCount,
-		Branch:      branch,
-		Tag:         tag,
-		RepoName:    repoName,
-		OrgName:     orgName,
-		Timestamp:   timestamp,
-		SCMType:     scmType,
+		RepoURL:           repoURL,
+		CommitSHA:         commitSHA,
+		RefType:           refTypeForEvent(in.BuildEvent),
+		PRNumber:          prNumberPtr,
+		LinesOfCode:       in.LinesOfCode,
+		FileCount:         in.FileCount,
+		Branch:            branch,
+		TargetBranch:      resolveTargetBranch(in.BuildEvent),
+		Tag:               tag,
+		RepoName:          repoName,
+		OrgName:           orgName,
+		Timestamp:         timestamp,
+		SCMType:           scmType,
+		SparseCheckout:    parseSparseCheckout(),
+		SubmoduleStrategy: strings.TrimSpace(os.Getenv("DRONE_NETRC_SUBMODULE_STRATEGY")),
 	}
 
 	jsonData, err := json.Marshal(metadata)
@@ -116,12 +122,30 @@ func TryWrite(workdir string, in Inputs) error {
 		"linesOfCode", metadata.LinesOfCode,
 		"fileCount", metadata.FileCount,
 		"branch", branch,
+		"targetBranch", metadata.TargetBranch,
 		"tag", tag,
 		"repoName", repoName,
 		"orgName", orgName,
 		"timestamp", timestamp,
+		"sparseCheckout", metadata.SparseCheckout,
+		"submoduleStrategy", metadata.SubmoduleStrategy,
 	)
 	return nil
+}
+
+func parseSparseCheckout() []string {
+	raw := os.Getenv("DRONE_NETRC_SPARSE_CHECKOUT")
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var paths []string
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			paths = append(paths, line)
+		}
+	}
+	return paths
 }
 
 func resolveBranchAndTag(workdir, buildEvent string) (string, string) {
@@ -131,9 +155,6 @@ func resolveBranchAndTag(workdir, buildEvent string) (string, string) {
 	checkedOut := gitAbbrevRef(workdir)
 
 	tagCheckout := os.Getenv("DRONE_BUILD_EVENT") == "tag" || strings.HasPrefix(ref, "refs/tags/")
-	if !tagCheckout && envTag != "" && envBranch == "" && checkedOut == "" {
-		tagCheckout = true
-	}
 	if tagCheckout {
 		tag := envTag
 		if tag == "" && strings.HasPrefix(ref, "refs/tags/") {
@@ -155,6 +176,16 @@ func resolveBranchAndTag(workdir, buildEvent string) (string, string) {
 
 func isPullRequestEvent(buildEvent string) bool {
 	return buildEvent == "pull_request" || os.Getenv("DRONE_BUILD_EVENT") == "pull_request"
+}
+
+func resolveTargetBranch(buildEvent string) string {
+	if !isPullRequestEvent(buildEvent) {
+		return ""
+	}
+	if target := strings.TrimSpace(os.Getenv("DRONE_TARGET_BRANCH")); target != "" {
+		return target
+	}
+	return strings.TrimSpace(os.Getenv("DRONE_COMMIT_BRANCH"))
 }
 
 // resolveCommitSHA returns the commit the clone scripts actually checked out.

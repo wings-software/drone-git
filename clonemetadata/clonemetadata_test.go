@@ -212,6 +212,7 @@ func TestTryWritePullRequestUsesSourceBranchOverCheckedOutTarget(t *testing.T) {
 	got := readMetadata(t, output)
 	assert.Equal(t, "pr", got.RefType)
 	assert.Equal(t, "feature-x", got.Branch)
+	assert.Equal(t, "main", got.TargetBranch)
 	assert.Empty(t, got.Tag)
 }
 
@@ -409,6 +410,7 @@ func TestTryWritePullRequestReceipt(t *testing.T) {
 	got := readMetadata(t, output)
 	assert.Equal(t, "pr", got.RefType)
 	assert.Equal(t, "feature-17", got.Branch)
+	assert.Equal(t, "main", got.TargetBranch)
 	require.NotNil(t, got.PRNumber)
 	assert.Equal(t, int64(17), *got.PRNumber)
 	assert.Equal(t, sha, got.CommitSHA)
@@ -435,6 +437,91 @@ func TestTryWritePullRequestDetachedNoSourceBranch(t *testing.T) {
 	got := readMetadata(t, output)
 	assert.Equal(t, "pr", got.RefType)
 	assert.Equal(t, "main", got.Branch)
+	assert.Equal(t, "main", got.TargetBranch)
+}
+
+// DRONE_TARGET_BRANCH (the manager's explicit field) wins; DRONE_COMMIT_BRANCH
+// is only the fallback when the explicit one is absent.
+func TestTryWriteTargetBranchPrefersExplicitEnv(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_BUILD_EVENT", "pull_request")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_TARGET_BRANCH", "release-1.x")
+	t.Setenv("DRONE_SOURCE_BRANCH", "feature-x")
+	t.Setenv("DRONE_COMMIT_REF", "refs/pull/3/head")
+	t.Setenv("DRONE_TAG", "")
+
+	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "pull_request"}))
+	got := readMetadata(t, output)
+	assert.Equal(t, "feature-x", got.Branch)
+	assert.Equal(t, "release-1.x", got.TargetBranch)
+}
+
+// targetBranch is a PR-only field: branch/tag checkouts never carry it, even
+// though DRONE_COMMIT_BRANCH is set on those builds too.
+func TestTryWriteOmitsTargetBranchForNonPR(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_BUILD_EVENT", "push")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_TAG", "")
+
+	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "push"}))
+	raw := string(mustRead(t, output))
+	assert.NotContains(t, raw, "targetBranch")
+	got := readMetadata(t, output)
+	assert.Equal(t, "main", got.Branch)
+	assert.Empty(t, got.TargetBranch)
+}
+
+func TestTryWriteSparseCheckoutAndSubmoduleStrategyFromEnv(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_NETRC_SPARSE_CHECKOUT", "src\n  docs/README.md\n\n")
+	t.Setenv("DRONE_NETRC_SUBMODULE_STRATEGY", "recursive")
+
+	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "push"}))
+	got := readMetadata(t, output)
+	assert.Equal(t, []string{"src", "docs/README.md"}, got.SparseCheckout)
+	assert.Equal(t, "recursive", got.SubmoduleStrategy)
+}
+
+func TestTryWriteOmitsSparseCheckoutAndSubmoduleStrategyWhenUnset(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_NETRC_SPARSE_CHECKOUT", "")
+	t.Setenv("DRONE_NETRC_SUBMODULE_STRATEGY", "")
+
+	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "push"}))
+	raw := string(mustRead(t, output))
+	assert.NotContains(t, raw, "sparseCheckout")
+	assert.NotContains(t, raw, "submoduleStrategy")
+	got := readMetadata(t, output)
+	assert.Empty(t, got.SparseCheckout)
+	assert.Empty(t, got.SubmoduleStrategy)
+}
+
+func TestParseSparseCheckout(t *testing.T) {
+	t.Setenv("DRONE_NETRC_SPARSE_CHECKOUT", "src\nfolder with space\n")
+	assert.Equal(t, []string{"src", "folder with space"}, parseSparseCheckout())
+
+	t.Setenv("DRONE_NETRC_SPARSE_CHECKOUT", "   \n\n")
+	assert.Nil(t, parseSparseCheckout())
 }
 
 func int64Ptr(v int64) *int64 { return &v }

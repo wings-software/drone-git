@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/harness/drone-git/clonemetadata"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slog"
@@ -29,13 +30,19 @@ func TestMainCloneMetadata(t *testing.T) {
 		args = append(args, "-test.gocoverdir="+coverage.Value.String())
 	}
 	for _, test := range []struct {
-		name          string
-		outputFailure bool
-		noBash        bool
+		name              string
+		outputFailure     bool
+		noBash            bool
+		receiptOnly       bool
+		receiptFailure    bool
+		telemetryDisabled bool
 	}{
 		{name: "successful metadata"},
 		{name: "metadata failure preserves successful clone", outputFailure: true},
 		{name: "minimal image without bash", noBash: true},
+		{name: "receipt only without telemetry file", receiptOnly: true},
+		{name: "receipt write failure preserves clone", receiptFailure: true},
+		{name: "telemetry disabled omits loc on receipt", telemetryDisabled: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if test.noBash && runtime.GOOS == "windows" {
@@ -99,7 +106,25 @@ func TestMainCloneMetadata(t *testing.T) {
 			} else {
 				require.NoError(t, os.MkdirAll(filepath.Dir(output), 0700))
 			}
-			t.Setenv("PLUGIN_BUILD_TOOL_FILE", output)
+			if test.receiptOnly {
+				t.Setenv("PLUGIN_BUILD_TOOL_FILE", "")
+			} else {
+				t.Setenv("PLUGIN_BUILD_TOOL_FILE", output)
+			}
+			if test.telemetryDisabled {
+				t.Setenv("CI_DISABLE_TELEMETRY", "true")
+			}
+			receipt := filepath.Join(root, "receipt", "clone-metadata.json")
+			switch {
+			case test.outputFailure:
+				// Leave receipt unset: this case only checks telemetry-file write failure.
+			case test.receiptFailure:
+				require.NoError(t, os.WriteFile(filepath.Join(root, "receipt"), []byte("preserve"), 0600))
+				t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", receipt)
+			default:
+				require.NoError(t, os.MkdirAll(filepath.Dir(receipt), 0700))
+				t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", receipt)
+			}
 			cmd := exec.Command(executable, args...)
 			cmd.Dir = root
 			cmd.Env = append(os.Environ(), "DRONE_GIT_MAIN_TEST_HELPER=1")
@@ -117,6 +142,33 @@ func TestMainCloneMetadata(t *testing.T) {
 				assert.Equal(t, "preserve", string(contents))
 				return
 			}
+			if test.receiptFailure {
+				contents, err := os.ReadFile(filepath.Join(root, "receipt"))
+				require.NoError(t, err)
+				assert.Equal(t, "preserve", string(contents))
+				assert.NoFileExists(t, receipt)
+				return
+			}
+
+			got := readCloneReceipt(t, receipt)
+			assert.Equal(t, sha, got.CommitSHA)
+			assert.Equal(t, "branch", got.RefType)
+			assert.Equal(t, "main", got.Branch)
+			if test.telemetryDisabled {
+				assert.Nil(t, got.LinesOfCode)
+				assert.Nil(t, got.FileCount)
+				assert.NoFileExists(t, output)
+				return
+			}
+			require.NotNil(t, got.LinesOfCode)
+			require.NotNil(t, got.FileCount)
+			assert.Greater(t, *got.FileCount, int64(0))
+			assert.Greater(t, *got.LinesOfCode, int64(0))
+			if test.receiptOnly {
+				assert.NoFileExists(t, output)
+				return
+			}
+
 			contents, err := os.ReadFile(output)
 			require.NoError(t, err)
 			var data BuildToolData
@@ -129,8 +181,19 @@ func TestMainCloneMetadata(t *testing.T) {
 			assert.Contains(t, data.HarnessLang, "JavaScript")
 			assert.Greater(t, data.Metrics.Files, int64(0))
 			assert.Equal(t, getPluginVersion(), data.PluginVersion)
+			assert.Equal(t, data.Metrics.Files, *got.FileCount)
+			assert.Equal(t, data.Metrics.Lines, *got.LinesOfCode)
 		})
 	}
+}
+
+func readCloneReceipt(t *testing.T, path string) clonemetadata.Metadata {
+	t.Helper()
+	contents, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var got clonemetadata.Metadata
+	require.NoError(t, json.Unmarshal(contents, &got))
+	return got
 }
 
 func TestRunGitCloneInvalidTempDirectory(t *testing.T) {
