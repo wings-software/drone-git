@@ -533,6 +533,23 @@ func initRepo(t *testing.T, files map[string]string) string {
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv("GIT_OPTIONAL_LOCKS", "0")
 
+	for _, key := range []string{
+		"DRONE_BUILD_EVENT",
+		"DRONE_COMMIT_BRANCH",
+		"DRONE_COMMIT_REF",
+		"DRONE_COMMIT_SHA",
+		"DRONE_PULL_REQUEST",
+		"DRONE_REMOTE_URL",
+		"DRONE_REPO_SCM",
+		"DRONE_SOURCE_BRANCH",
+		"DRONE_TAG",
+		"DRONE_TARGET_BRANCH",
+		"DRONE_NETRC_SPARSE_CHECKOUT",
+		"DRONE_NETRC_SUBMODULE_STRATEGY",
+	} {
+		t.Setenv(key, "")
+	}
+
 	dir := t.TempDir()
 	git(t, dir, "init", "-b", "main")
 	git(t, dir, "config", "gc.auto", "0")
