@@ -17,6 +17,8 @@ import (
 
 	"github.com/boyter/scc/v3/processor"
 	"golang.org/x/exp/slog"
+
+	"github.com/harness/drone-git/clonemetadata"
 )
 
 const mode os.FileMode = 0755
@@ -370,8 +372,9 @@ func executeBuildToolScript(workdir string) error {
 	return nil
 }
 
-// tryCollectAndWriteMetrics attempts to collect code metrics and write build tool file
-func tryCollectAndWriteMetrics(workdir string) error {
+// tryCollectAndWriteMetrics writes the build tool file using the shared scc
+// result from main. Nil metrics means that pass was disabled or failed; record zeros.
+func tryCollectAndWriteMetrics(workdir string, metrics *CodeMetrics) error {
 	buildToolFile := os.Getenv("PLUGIN_BUILD_TOOL_FILE")
 	if buildToolFile == "" {
 		slog.Debug("No PLUGIN_BUILD_TOOL_FILE specified, skipping metrics collection")
@@ -407,10 +410,8 @@ func tryCollectAndWriteMetrics(workdir string) error {
 	harnessLang, _ := existingData["harness_lang"].(string)
 	harnessBuildTool, _ := existingData["harness_build_tool"].(string)
 
-	// Collect SCC metrics only if not specifically disabled
-	var metrics *CodeMetrics
-	if os.Getenv("DISABLE_SCC_METRICS") != "" {
-		slog.Debug("Metrics disabled, using empty metrics")
+	if metrics == nil {
+		slog.Debug("No metrics from the shared scc pass, using empty metrics")
 		metrics = &CodeMetrics{
 			Lines:      0,
 			Code:       0,
@@ -419,22 +420,6 @@ func tryCollectAndWriteMetrics(workdir string) error {
 			Complexity: 0,
 			Files:      0,
 			Languages:  make(map[string]LanguageMetrics),
-		}
-	} else {
-		var err error
-		metrics, err = collectCodeMetrics(workdir)
-		if err != nil {
-			slog.Warn("Failed to collect metrics", "error", err)
-			// Use empty metrics if scc fails
-			metrics = &CodeMetrics{
-				Lines:      0,
-				Code:       0,
-				Comments:   0,
-				Blanks:     0,
-				Complexity: 0,
-				Files:      0,
-				Languages:  make(map[string]LanguageMetrics),
-			}
 		}
 	}
 
@@ -486,7 +471,15 @@ func collectAndWriteMetrics(workdir string) {
 		defer cleanupTempDir() // Cleanup after test
 	}
 
-	if err := tryCollectAndWriteMetrics(workdir); err != nil {
+	var metrics *CodeMetrics
+	if os.Getenv("CI_DISABLE_TELEMETRY") == "" && os.Getenv("DISABLE_SCC_METRICS") == "" {
+		var err error
+		metrics, err = collectCodeMetrics(workdir)
+		if err != nil {
+			slog.Warn("Failed to collect metrics", "error", err)
+		}
+	}
+	if err := tryCollectAndWriteMetrics(workdir, metrics); err != nil {
 		slog.Warn("Metrics collection failed", "error", err)
 	}
 }
@@ -610,9 +603,30 @@ func main() {
 		return // Analytics failure - don't fail the step, just skip
 	}
 
+	// One scc pass per clone; receipt and telemetry share loc/fileCount.
+	var metrics *CodeMetrics
+	if os.Getenv("CI_DISABLE_TELEMETRY") == "" && os.Getenv("DISABLE_SCC_METRICS") == "" &&
+		(os.Getenv("PLUGIN_BUILD_TOOL_FILE") != "" || os.Getenv("HARNESS_GIT_CLONE_METADATA_FILE") != "") {
+		var err error
+		metrics, err = collectCodeMetrics(workdir)
+		if err != nil {
+			slog.Warn("Failed to collect metrics", "error", err)
+		}
+	}
+	var loc, files *int64
+	if metrics != nil {
+		loc, files = &metrics.Lines, &metrics.Files
+	}
+	if err := clonemetadata.TryWrite(workdir, clonemetadata.Inputs{
+		LinesOfCode: loc,
+		FileCount:   files,
+	}); err != nil {
+		slog.Warn("Git clone metadata write failed but continuing", "error", err)
+	}
+
 	// Collect code metrics and write complete build tool file
 	// Note: Analytics failures should not fail the step
-	if err := tryCollectAndWriteMetrics(workdir); err != nil {
+	if err := tryCollectAndWriteMetrics(workdir, metrics); err != nil {
 		slog.Warn("Metrics collection failed but continuing (analytics only)", "error", err)
 		// Continue - don't fail the step for analytics issues
 	}
