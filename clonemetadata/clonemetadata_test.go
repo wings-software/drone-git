@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -66,10 +67,63 @@ func TestSanitizeRepoURL(t *testing.T) {
 	assert.Equal(t, "ssh://git@github.com/acme/app.git", sanitizeRepoURL("ssh://git@github.com/acme/app.git"))
 	assert.Equal(t, "ssh://github.com/acme/app.git", sanitizeRepoURL("ssh://git:pass@github.com/acme/app.git"))
 	assert.Equal(t, "", sanitizeRepoURL(""))
+
+	// Query/fragment can carry tokens (?access_token=...); strip on every
+	// parseable scheme. The URL otherwise round-trips unchanged.
+	assert.Equal(t, "https://github.com/acme/app.git", sanitizeRepoURL("https://github.com/acme/app.git?access_token=secret"))
+	assert.Equal(t, "https://github.com/acme/app.git", sanitizeRepoURL("https://user:token@github.com/acme/app.git?access_token=secret"))
+	assert.Equal(t, "https://github.com/acme/app.git", sanitizeRepoURL("https://github.com/acme/app.git?access_token=secret#frag"))
+	assert.Equal(t, "https://github.com/acme/app.git", sanitizeRepoURL("https://github.com/acme/app.git"))
+	assert.Equal(t, "ssh://host/repo.git", sanitizeRepoURL("ssh://host/repo.git?token=x"))
+	assert.Equal(t, "ssh://git@host/repo.git", sanitizeRepoURL("ssh://git@host/repo.git?token=x"))
+	assert.Equal(t, "ssh://git@host/repo.git", sanitizeRepoURL("ssh://git@host/repo.git"))
+	assert.Equal(t, "ssh://host/repo.git", sanitizeRepoURL("ssh://git:pass@host/repo.git?token=x"))
+	assert.Equal(t, "ssh://host/repo.git", sanitizeRepoURL("ssh://host/repo.git?"))
+	assert.Equal(t, "ssh://host/repo.git", sanitizeRepoURL("ssh://host/repo.git#frag"))
 }
 
-// refType comes from the binary's build-event classification (getBuildEventInfo),
-// shared with the telemetry file; the receipt does not classify on its own.
+// A query-token URL must not reach the receipt, and identity parsing must
+// still see the repo path (queries are not part of u.Path).
+func TestTryWriteStripsQueryCredentials(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git?access_token=secret")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+
+	require.NoError(t, TryWrite(workdir, Inputs{}))
+	got := readMetadata(t, output)
+	assert.Equal(t, "https://github.com/acme/app", got.RepoURL)
+	assert.Equal(t, "acme", got.OrgName)
+	assert.Equal(t, "app", got.RepoName)
+	assert.NotContains(t, string(mustRead(t, output)), "secret")
+}
+
+func TestCloneTypeFromEnv(t *testing.T) {
+	for _, test := range []struct {
+		name, event, ref, want string
+	}{
+		{name: "event tag", event: "tag", ref: "", want: "tag"},
+		{name: "event pull_request", event: "pull_request", ref: "", want: "pull_request"},
+		{name: "event push", event: "push", ref: "", want: "push"},
+		{name: "empty", event: "", ref: "", want: ""},
+		{name: "tag ref overrides push", event: "push", ref: "refs/tags/v1", want: "tag"},
+		{name: "pull ref overrides push", event: "push", ref: "refs/pull/9/head", want: "pull_request"},
+		{name: "pull-request ref", event: "push", ref: "refs/pull-request/1/from", want: "pull_request"},
+		{name: "merge-requests ref", event: "push", ref: "refs/merge-requests/1/head", want: "pull_request"},
+		{name: "tag ref wins over pull_request event", event: "pull_request", ref: "refs/tags/v1", want: "tag"},
+		{name: "heads ref does not override", event: "push", ref: "refs/heads/main", want: "push"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("DRONE_BUILD_EVENT", test.event)
+			t.Setenv("DRONE_COMMIT_REF", test.ref)
+			assert.Equal(t, test.want, cloneTypeFromEnv())
+		})
+	}
+}
+
+// refType maps cloneTypeFromEnv (posix/clone CLONE_TYPE) onto the receipt wire values.
 func TestRefTypeForEvent(t *testing.T) {
 	for _, test := range []struct {
 		event, want string
@@ -93,11 +147,86 @@ func TestTryWriteRefTypePRFromBuildEvent(t *testing.T) {
 	output := filepath.Join(t.TempDir(), "metadata.json")
 	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
 	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_BUILD_EVENT", "pull_request")
 	t.Setenv("DRONE_COMMIT_BRANCH", "main")
 
-	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "pull_request"}))
+	require.NoError(t, TryWrite(workdir, Inputs{}))
 	got := readMetadata(t, output)
 	assert.Equal(t, "pr", got.RefType)
+}
+
+// posix/clone: DRONE_COMMIT_REF=refs/tags/* forces CLONE_TYPE=tag even when
+// DRONE_BUILD_EVENT is push. getBuildEventInfo would still say branch.
+func TestTryWriteTagRefOverridesPushEvent(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+	git(t, workdir, "tag", "v1.2.3")
+	git(t, workdir, "checkout", "--detach", "v1.2.3")
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_BUILD_EVENT", "push")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_TAG", "v1.2.3")
+	t.Setenv("DRONE_COMMIT_REF", "refs/tags/v1.2.3")
+
+	require.NoError(t, TryWrite(workdir, Inputs{}))
+	got := readMetadata(t, output)
+	assert.Equal(t, "tag", got.RefType)
+	assert.Equal(t, "v1.2.3", got.Tag)
+	assert.Empty(t, got.Branch)
+	assert.Empty(t, got.TargetBranch)
+}
+
+// posix/clone: empty event and DRONE_TAG without refs/tags/* is clone-commit.
+// getBuildEventInfo would still classify that as tag.
+func TestTryWriteEmptyEventWithDroneTagIsBranch(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_BUILD_EVENT", "")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_TAG", "v1.2.3")
+	t.Setenv("DRONE_COMMIT_REF", "")
+
+	require.NoError(t, TryWrite(workdir, Inputs{}))
+	got := readMetadata(t, output)
+	assert.Equal(t, "branch", got.RefType)
+	assert.Equal(t, "main", got.Branch)
+	assert.Empty(t, got.Tag)
+	assert.Empty(t, got.TargetBranch)
+}
+
+// posix/clone: PR refs override a non-PR DRONE_BUILD_EVENT.
+func TestTryWritePullRequestRefOverridesPushEvent(t *testing.T) {
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_BUILD_EVENT", "push")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_SOURCE_BRANCH", "feature-x")
+	t.Setenv("DRONE_TARGET_BRANCH", "main")
+	for _, ref := range []string{
+		"refs/pull/9/head",
+		"refs/pull-request/9/from",
+		"refs/merge-requests/9/head",
+	} {
+		t.Run(ref, func(t *testing.T) {
+			t.Setenv("DRONE_COMMIT_REF", ref)
+			t.Setenv("DRONE_TAG", "")
+
+			require.NoError(t, TryWrite(workdir, Inputs{}))
+			got := readMetadata(t, output)
+			assert.Equal(t, "pr", got.RefType)
+			assert.Equal(t, "feature-x", got.Branch)
+			assert.Equal(t, "main", got.TargetBranch)
+			assert.Empty(t, got.Tag)
+		})
+	}
 }
 
 // A plain branch push resolves to refType branch.
@@ -109,7 +238,7 @@ func TestTryWriteRefTypeBranch(t *testing.T) {
 	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
 	t.Setenv("DRONE_COMMIT_BRANCH", "main")
 
-	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "push"}))
+	require.NoError(t, TryWrite(workdir, Inputs{}))
 	got := readMetadata(t, output)
 	assert.Equal(t, "branch", got.RefType)
 }
@@ -129,7 +258,7 @@ func TestTryWriteBranchClone(t *testing.T) {
 	t.Setenv("DRONE_COMMIT_SHA", "")
 
 	before := time.Now().UnixMilli()
-	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "push", LinesOfCode: int64Ptr(48210), FileCount: int64Ptr(12)}))
+	require.NoError(t, TryWrite(workdir, Inputs{LinesOfCode: int64Ptr(48210), FileCount: int64Ptr(12)}))
 	after := time.Now().UnixMilli()
 
 	got := readMetadata(t, output)
@@ -160,7 +289,7 @@ func TestTryWriteOmitsLinesOfCodeWhenNotProvided(t *testing.T) {
 	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
 	t.Setenv("DRONE_COMMIT_BRANCH", "main")
 
-	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "push"}))
+	require.NoError(t, TryWrite(workdir, Inputs{}))
 	got := readMetadata(t, output)
 	assert.Nil(t, got.LinesOfCode)
 	assert.NotContains(t, string(mustRead(t, output)), "linesOfCode")
@@ -180,7 +309,7 @@ func TestTryWriteTagClone(t *testing.T) {
 	t.Setenv("DRONE_TAG", "v1.2.3")
 	t.Setenv("DRONE_COMMIT_REF", "refs/tags/v1.2.3")
 
-	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "tag", LinesOfCode: int64Ptr(1)}))
+	require.NoError(t, TryWrite(workdir, Inputs{LinesOfCode: int64Ptr(1)}))
 	got := readMetadata(t, output)
 	assert.Equal(t, "git@github.com:acme/app", got.RepoURL)
 	assert.Equal(t, "tag", got.RefType)
@@ -208,7 +337,7 @@ func TestTryWritePullRequestUsesSourceBranchOverCheckedOutTarget(t *testing.T) {
 	t.Setenv("DRONE_TAG", "stale")
 	t.Setenv("DRONE_COMMIT_REF", "refs/merge-requests/1/head")
 
-	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "pull_request"}))
+	require.NoError(t, TryWrite(workdir, Inputs{}))
 	got := readMetadata(t, output)
 	assert.Equal(t, "pr", got.RefType)
 	assert.Equal(t, "feature-x", got.Branch)
@@ -228,7 +357,7 @@ func TestTryWriteTagFromRefWhenEnvTagEmpty(t *testing.T) {
 	t.Setenv("DRONE_TAG", "")
 	t.Setenv("DRONE_COMMIT_REF", "refs/tags/v9")
 
-	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "tag"}))
+	require.NoError(t, TryWrite(workdir, Inputs{}))
 	got := readMetadata(t, output)
 	assert.Equal(t, "tag", got.RefType)
 	assert.Empty(t, got.Branch)
@@ -406,7 +535,7 @@ func TestTryWritePullRequestReceipt(t *testing.T) {
 	t.Setenv("DRONE_COMMIT_REF", "refs/pull/17/head")
 	t.Setenv("DRONE_TAG", "")
 
-	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "pull_request"}))
+	require.NoError(t, TryWrite(workdir, Inputs{}))
 	got := readMetadata(t, output)
 	assert.Equal(t, "pr", got.RefType)
 	assert.Equal(t, "feature-17", got.Branch)
@@ -433,7 +562,7 @@ func TestTryWritePullRequestDetachedNoSourceBranch(t *testing.T) {
 	t.Setenv("DRONE_COMMIT_REF", "refs/pull/9/head")
 	t.Setenv("DRONE_TAG", "")
 
-	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "pull_request"}))
+	require.NoError(t, TryWrite(workdir, Inputs{}))
 	got := readMetadata(t, output)
 	assert.Equal(t, "pr", got.RefType)
 	assert.Equal(t, "main", got.Branch)
@@ -455,7 +584,7 @@ func TestTryWriteTargetBranchPrefersExplicitEnv(t *testing.T) {
 	t.Setenv("DRONE_COMMIT_REF", "refs/pull/3/head")
 	t.Setenv("DRONE_TAG", "")
 
-	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "pull_request"}))
+	require.NoError(t, TryWrite(workdir, Inputs{}))
 	got := readMetadata(t, output)
 	assert.Equal(t, "feature-x", got.Branch)
 	assert.Equal(t, "release-1.x", got.TargetBranch)
@@ -473,7 +602,7 @@ func TestTryWriteOmitsTargetBranchForNonPR(t *testing.T) {
 	t.Setenv("DRONE_COMMIT_BRANCH", "main")
 	t.Setenv("DRONE_TAG", "")
 
-	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "push"}))
+	require.NoError(t, TryWrite(workdir, Inputs{}))
 	raw := string(mustRead(t, output))
 	assert.NotContains(t, raw, "targetBranch")
 	got := readMetadata(t, output)
@@ -491,7 +620,7 @@ func TestTryWriteSparseCheckoutAndSubmoduleStrategyFromEnv(t *testing.T) {
 	t.Setenv("DRONE_NETRC_SPARSE_CHECKOUT", "src\n  docs/README.md\n\n")
 	t.Setenv("DRONE_NETRC_SUBMODULE_STRATEGY", "recursive")
 
-	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "push"}))
+	require.NoError(t, TryWrite(workdir, Inputs{}))
 	got := readMetadata(t, output)
 	assert.Equal(t, []string{"src", "docs/README.md"}, got.SparseCheckout)
 	assert.Equal(t, "recursive", got.SubmoduleStrategy)
@@ -507,7 +636,7 @@ func TestTryWriteOmitsSparseCheckoutAndSubmoduleStrategyWhenUnset(t *testing.T) 
 	t.Setenv("DRONE_NETRC_SPARSE_CHECKOUT", "")
 	t.Setenv("DRONE_NETRC_SUBMODULE_STRATEGY", "")
 
-	require.NoError(t, TryWrite(workdir, Inputs{BuildEvent: "push"}))
+	require.NoError(t, TryWrite(workdir, Inputs{}))
 	raw := string(mustRead(t, output))
 	assert.NotContains(t, raw, "sparseCheckout")
 	assert.NotContains(t, raw, "submoduleStrategy")
@@ -522,6 +651,145 @@ func TestParseSparseCheckout(t *testing.T) {
 
 	t.Setenv("DRONE_NETRC_SPARSE_CHECKOUT", "   \n\n")
 	assert.Nil(t, parseSparseCheckout())
+}
+
+// The clone scripts export HOME and GIT_CONFIG_GLOBAL only for themselves;
+// without the fix, gitOutput's child git never sees the isolated .gitconfig
+// carrying safe.directory '*' and fails on other-owned workspaces.
+func TestGitEnv(t *testing.T) {
+	t.Run("no isolation passes env through", func(t *testing.T) {
+		t.Setenv("HARNESS_GIT_CONFIG_FOLDER", "")
+		assert.Equal(t, os.Environ(), gitEnv())
+	})
+
+	t.Run("isolation appends and overrides inherited values", func(t *testing.T) {
+		folder := t.TempDir()
+		t.Setenv("HARNESS_GIT_CONFIG_FOLDER", folder)
+		t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+		t.Setenv("HOME", "/inherited-home")
+
+		env := gitEnv()
+		assert.Equal(t, filepath.Join(folder, ".gitconfig"), lastEnvValue(env, "GIT_CONFIG_GLOBAL"))
+		assert.Equal(t, folder, lastEnvValue(env, "HOME"))
+		assert.Equal(t, folder, lastEnvValue(env, "USERPROFILE"))
+	})
+}
+
+func TestGitOutputUsesIsolatedGitConfig(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake git is a shell script")
+	}
+	folder := t.TempDir()
+	t.Setenv("HARNESS_GIT_CONFIG_FOLDER", folder)
+	// Inherited values must lose to the isolated ones.
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	t.Setenv("HOME", "/inherited-home")
+
+	fakeGit(t)
+	out := gitOutput(t.TempDir(), "rev-parse", "HEAD")
+	assert.Contains(t, out, "GLOBAL="+filepath.Join(folder, ".gitconfig"))
+	assert.Contains(t, out, "HOME="+folder)
+}
+
+func TestGitOutputWithoutIsolationLeavesEnvUntouched(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake git is a shell script")
+	}
+	t.Setenv("HARNESS_GIT_CONFIG_FOLDER", "")
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	t.Setenv("HOME", "/inherited-home")
+
+	fakeGit(t)
+	out := gitOutput(t.TempDir(), "rev-parse", "HEAD")
+	assert.Contains(t, out, "GLOBAL=/dev/null")
+	assert.Contains(t, out, "HOME=/inherited-home")
+}
+
+func TestResolveCommitSHAHonoursIsolatedSafeDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("ownership simulation is unix-oriented")
+	}
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+	want := git(t, workdir, "rev-parse", "HEAD") // compute BEFORE the hook below
+
+	folder := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(folder, ".gitconfig"),
+		[]byte("[safe]\n\tdirectory = *\n"), 0o600))
+
+	t.Setenv("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
+	t.Setenv("DRONE_COMMIT_SHA", "")
+
+	// Without isolation: ownership check blocks git.
+	t.Setenv("HARNESS_GIT_CONFIG_FOLDER", "")
+	require.Empty(t, resolveCommitSHA(workdir),
+		"precondition: git must refuse without the isolated config (needs git >= 2.35.2)")
+
+	// With isolation: safe.directory applies.
+	t.Setenv("HARNESS_GIT_CONFIG_FOLDER", folder)
+	assert.Equal(t, want, resolveCommitSHA(workdir))
+}
+
+func TestResolveCommitSHAPrefersRealHeadUnderOwnershipCheck(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("ownership simulation is unix-oriented")
+	}
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+	want := git(t, workdir, "rev-parse", "HEAD")
+
+	folder := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(folder, ".gitconfig"),
+		[]byte("[safe]\n\tdirectory = *\n"), 0o600))
+
+	t.Setenv("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
+	t.Setenv("HARNESS_GIT_CONFIG_FOLDER", folder)
+	t.Setenv("DRONE_COMMIT_SHA", "deadbeef") // requested/source SHA, not the merge SHA
+
+	assert.Equal(t, want, resolveCommitSHA(workdir))
+}
+
+func TestTryWriteWritesReceiptUnderOwnershipCheck(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("ownership simulation is unix-oriented")
+	}
+	workdir := initRepo(t, map[string]string{"f.txt": "a\n"})
+	want := git(t, workdir, "rev-parse", "HEAD")
+
+	folder := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(folder, ".gitconfig"),
+		[]byte("[safe]\n\tdirectory = *\n"), 0o600))
+
+	output := filepath.Join(t.TempDir(), "metadata.json")
+	t.Setenv("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
+	t.Setenv("HARNESS_GIT_CONFIG_FOLDER", folder)
+	t.Setenv("HARNESS_GIT_CLONE_METADATA_FILE", output)
+	t.Setenv("DRONE_REMOTE_URL", "https://github.com/acme/app.git")
+	t.Setenv("DRONE_COMMIT_BRANCH", "main")
+	t.Setenv("DRONE_COMMIT_SHA", "") // no requested SHA
+
+	require.NoError(t, TryWrite(workdir, Inputs{}))
+	got := readMetadata(t, output)
+	assert.Equal(t, want, got.CommitSHA)
+	assert.Equal(t, "main", got.Branch) // gitAbbrevRef also works under isolation
+}
+
+// fakeGit puts a script named git first on PATH that reports the environment
+// its caller handed it.
+func fakeGit(t *testing.T) {
+	t.Helper()
+	bin := t.TempDir()
+	script := "#!/bin/sh\nprintf 'GLOBAL=%s\\nHOME=%s\\n' \"$GIT_CONFIG_GLOBAL\" \"$HOME\"\n"
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0755))
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func lastEnvValue(env []string, key string) string {
+	value := ""
+	for _, kv := range env {
+		if strings.HasPrefix(kv, key+"=") {
+			value = strings.TrimPrefix(kv, key+"=")
+		}
+	}
+	return value
 }
 
 func int64Ptr(v int64) *int64 { return &v }

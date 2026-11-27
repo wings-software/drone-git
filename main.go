@@ -613,7 +613,6 @@ func main() {
 			slog.Warn("Failed to collect metrics", "error", err)
 		}
 	}
-	buildEvent, _ := getBuildEventInfo()
 	var loc, files *int64
 	if metrics != nil {
 		loc, files = &metrics.Lines, &metrics.Files
@@ -621,7 +620,6 @@ func main() {
 	if err := clonemetadata.TryWrite(workdir, clonemetadata.Inputs{
 		LinesOfCode: loc,
 		FileCount:   files,
-		BuildEvent:  buildEvent,
 	}); err != nil {
 		slog.Warn("Git clone metadata write failed but continuing", "error", err)
 	}

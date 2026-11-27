@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -37,28 +38,13 @@ type Metadata struct {
 }
 
 // Inputs carries values the drone-git binary already computes for its own
-// telemetry pass; reusing them keeps one definition of lines-of-code and ref
-// type per clone instead of the receipt counting and classifying again.
+// telemetry pass; reusing them keeps one definition of lines-of-code per clone
+// instead of the receipt counting again.
 type Inputs struct {
-	// LinesOfCode and FileCount are scc totals from the binary's metrics pass
-	// (metrics.Lines / metrics.Files). Prefer the shared telemetry scan; if
-	// that pass was skipped the caller falls back to a receipt-only scan.
-	// Nil omits the fields. FileCount is files scc analysed, not git ls-files:
-	// vendor, node_modules, .git and oversized files are excluded, same as loc.
 	LinesOfCode *int64
 	FileCount   *int64
-	// BuildEvent is the binary's getBuildEventInfo classification of
-	// DRONE_BUILD_EVENT: tag, pull_request, branch, push or commit.
-	BuildEvent string
 }
 
-// TryWrite writes the clone receipt for a Git Clone step (explicit or implicit).
-//
-// It is a no-op unless HARNESS_GIT_CLONE_METADATA_FILE is set; the addon
-// injects that path on every step container, and only drone-git writes the file.
-// refType comes from the caller's build-event classification (the same source
-// the clone scripts' CLONE_TYPE uses). The caller logs errors and does not fail
-// the step.
 func TryWrite(workdir string, in Inputs) error {
 	metadataFile := os.Getenv("HARNESS_GIT_CLONE_METADATA_FILE")
 	if metadataFile == "" {
@@ -80,7 +66,8 @@ func TryWrite(workdir string, in Inputs) error {
 		return nil
 	}
 
-	branch, tag := resolveBranchAndTag(workdir, in.BuildEvent)
+	cloneType := cloneTypeFromEnv()
+	branch, tag := resolveBranchAndTag(workdir, cloneType)
 	var prNumberPtr *int64
 	if n, ok := resolvePRNumber(); ok {
 		prNumberPtr = &n
@@ -90,12 +77,12 @@ func TryWrite(workdir string, in Inputs) error {
 	metadata := Metadata{
 		RepoURL:           repoURL,
 		CommitSHA:         commitSHA,
-		RefType:           refTypeForEvent(in.BuildEvent),
+		RefType:           refTypeForEvent(cloneType),
 		PRNumber:          prNumberPtr,
 		LinesOfCode:       in.LinesOfCode,
 		FileCount:         in.FileCount,
 		Branch:            branch,
-		TargetBranch:      resolveTargetBranch(in.BuildEvent),
+		TargetBranch:      resolveTargetBranch(cloneType),
 		Tag:               tag,
 		RepoName:          repoName,
 		OrgName:           orgName,
@@ -148,14 +135,13 @@ func parseSparseCheckout() []string {
 	return paths
 }
 
-func resolveBranchAndTag(workdir, buildEvent string) (string, string) {
+func resolveBranchAndTag(workdir, cloneType string) (string, string) {
 	envBranch := strings.TrimSpace(os.Getenv("DRONE_COMMIT_BRANCH"))
 	envTag := strings.TrimSpace(os.Getenv("DRONE_TAG"))
 	ref := strings.TrimSpace(os.Getenv("DRONE_COMMIT_REF"))
 	checkedOut := gitAbbrevRef(workdir)
 
-	tagCheckout := os.Getenv("DRONE_BUILD_EVENT") == "tag" || strings.HasPrefix(ref, "refs/tags/")
-	if tagCheckout {
+	if cloneType == "tag" {
 		tag := envTag
 		if tag == "" && strings.HasPrefix(ref, "refs/tags/") {
 			tag = strings.TrimPrefix(ref, "refs/tags/")
@@ -163,7 +149,7 @@ func resolveBranchAndTag(workdir, buildEvent string) (string, string) {
 		return "", tag
 	}
 
-	if isPullRequestEvent(buildEvent) {
+	if cloneType == "pull_request" {
 		if src := strings.TrimSpace(os.Getenv("DRONE_SOURCE_BRANCH")); src != "" {
 			return src, ""
 		}
@@ -174,12 +160,8 @@ func resolveBranchAndTag(workdir, buildEvent string) (string, string) {
 	return checkedOut, ""
 }
 
-func isPullRequestEvent(buildEvent string) bool {
-	return buildEvent == "pull_request" || os.Getenv("DRONE_BUILD_EVENT") == "pull_request"
-}
-
-func resolveTargetBranch(buildEvent string) string {
-	if !isPullRequestEvent(buildEvent) {
+func resolveTargetBranch(cloneType string) string {
+	if cloneType != "pull_request" {
 		return ""
 	}
 	if target := strings.TrimSpace(os.Getenv("DRONE_TARGET_BRANCH")); target != "" {
@@ -209,6 +191,7 @@ func gitAbbrevRef(workdir string) string {
 func gitOutput(workdir string, args ...string) string {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = workdir
+	cmd.Env = gitEnv()
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -216,8 +199,41 @@ func gitOutput(workdir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// refTypeForEvent maps the binary's build-event classification (getBuildEventInfo,
-// the same source the clone scripts' CLONE_TYPE uses) onto the receipt's wire values.
+func gitEnv() []string {
+	env := os.Environ()
+	folder := strings.TrimSpace(os.Getenv("HARNESS_GIT_CONFIG_FOLDER"))
+	if folder == "" {
+		return env
+	}
+	return append(env,
+		"HOME="+folder,
+		// windows/clone.ps1 sets USERPROFILE alongside HOME; git-for-Windows
+		// resolves the global config through it. Ignored elsewhere.
+		"USERPROFILE="+folder,
+		"GIT_CONFIG_GLOBAL="+filepath.Join(folder, ".gitconfig"),
+	)
+}
+
+// cloneTypeFromEnv is posix/clone's CLONE_TYPE: start from DRONE_BUILD_EVENT,
+// then DRONE_COMMIT_REF overrides (tag and PR refs). Empty event plus DRONE_TAG
+// is still a commit/branch clone unless the ref is refs/tags/*.
+func cloneTypeFromEnv() string {
+	cloneType := os.Getenv("DRONE_BUILD_EVENT")
+	ref := strings.TrimSpace(os.Getenv("DRONE_COMMIT_REF"))
+	switch {
+	case strings.HasPrefix(ref, "refs/tags/"):
+		return "tag"
+	case strings.HasPrefix(ref, "refs/pull/"),
+	strings.HasPrefix(ref, "refs/pull-request/"),
+		strings.HasPrefix(ref, "refs/pull-requests/"),
+		strings.HasPrefix(ref, "refs/merge-requests/"):
+		return "pull_request"
+	}
+	return cloneType
+}
+
+// refTypeForEvent maps cloneTypeFromEnv (posix/clone's CLONE_TYPE) onto the
+// receipt's wire values.
 func refTypeForEvent(buildEvent string) string {
 	switch buildEvent {
 	case "tag":
@@ -229,23 +245,35 @@ func refTypeForEvent(buildEvent string) string {
 	}
 }
 
+// sanitizeRepoURL strips credentials from the clone URL before it is recorded
+// or logged. Query and fragment go for every parseable URL: ?access_token=...
+// style secrets can ride any scheme, and no part of the query identifies a
+// repository. Userinfo is always dropped on http(s); on ssh:// it is dropped
+// only when it carries a password. Unparseable forms (scp-style git@host:path)
+// pass through byte-identical. The caller's original URL (and the clone
+// itself) is never touched.
 func sanitizeRepoURL(rawURL string) string {
 	if rawURL == "" {
 		return rawURL
 	}
 	u, err := url.Parse(rawURL)
-	if err != nil || u == nil || u.User == nil {
+	if err != nil || u == nil {
 		return rawURL
 	}
-	switch strings.ToLower(u.Scheme) {
-	case "http", "https":
+	u.RawQuery = ""
+	u.ForceQuery = false
+	u.Fragment = ""
+	u.RawFragment = ""
+
+	if strings.EqualFold(u.Scheme, "http") || strings.EqualFold(u.Scheme, "https") {
 		u.User = nil
 		return u.String()
 	}
-	if _, hasPassword := u.User.Password(); !hasPassword {
-		return rawURL
+	if u.User != nil {
+		if _, hasPassword := u.User.Password(); hasPassword {
+			u.User = nil
+		}
 	}
-	u.User = nil
 	return u.String()
 }
 
